@@ -241,6 +241,30 @@ was invisible to the reviewer. Recorded retroactively in agent-platform
 `production.jsonl` is the memory across runs, so an unrecorded run is not a
 bookkeeping gap: the next pick stage would have been free to repeat the story.
 
+### Browser integration — tested through a task, not assumed
+
+Everything above this point was read-only, which proved nothing about the half
+of the pipeline that matters most: the publisher drives a real Chrome. A task
+that can read files and call APIs may still be unable to launch a browser from a
+scheduled context.
+
+Tested with `automation/check-sessions.py`, which uses the same
+`browser.get_context()` the publisher does, visits each platform and reads only
+public page state — it never touches credentials and posts nothing:
+
+    YouTube    LOGGED IN
+    TikTok     LOGGED IN
+    Instagram  LOGGED IN
+    Facebook   unclear        (nothing publishes there — money-stories is 3 platforms)
+
+24 seconds, exit 0, no retries. So Chrome launches from a Hermes task, the shared
+`browser-profile/` and its lock work, and the sessions the publisher needs are
+live. The throwaway job was removed after.
+
+Facebook has never been part of money-stories: `upload.py` has exactly three
+publish functions. `post_facebook` exists only in nordyl's separate
+`pipeline/publishing/poster.py`, which has published nothing yet.
+
 ### NOT DONE — the gateway
 
 `hermes gateway install --start-now --start-on-login` was **refused by this
