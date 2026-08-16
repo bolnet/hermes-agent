@@ -134,7 +134,40 @@ from the Shorts feed, suggested videos and notifications:
 Two of nordyl's four videos sat in that state for a week with 20 impressions
 between them and 0% Shorts-feed traffic.
 
-Record exactly what was verified, never what you believe succeeded.
+Then **append the ledger line**. This step is not optional and has now been
+missed twice — by a human on v17 and by the first autonomous run on v18, both
+times because the instruction said "record" without giving the command:
+
+    .venv/bin/python - <<'PY'
+    import json
+    from pathlib import Path
+    p = Path("automation/logs/production.jsonl")
+    p.open("a").write(json.dumps({
+      "ts": "<UTC ISO8601>", "video": "<slug>", "pillar": "<pillar>",
+      "title": "<title>",
+      "url": {"youtube": "...", "tiktok": "...", "instagram": "..."},
+      "platforms": {"youtube": True, "tiktok": True, "instagram": True},
+      "cost_usd": 0.0,
+      "notes": "what you changed, what you found, what you could not verify",
+    }) + "\n")
+    PY
+
+`production.jsonl` is the memory across runs: step 1 reads it to avoid repeating
+a story, and the weekly review reads it to know what exists. An unrecorded video
+is invisible to both — v17 was published and the weekly review still reported it
+as missing, so the control test it was waiting for could not be used.
+
+Verify the line landed before you finish:
+
+    grep -c "<slug>" automation/logs/production.jsonl    # must be 1
+
+Record exactly what was verified, never what you believe succeeded. `platforms`
+values must be the results you checked, not the ones you attempted.
+
+**Titles containing `$`:** set the title INSIDE the state file, never through a
+shell `--set title=...` — `run_state.py` has the same `$`-expansion exposure
+`upload.py` was fixed for. v18 silently lost "$139" from its headline this way.
+Do not weaken a title to dodge the bug; write it via Python and keep the number.
 
 ## 8. Measure, and change something
 
