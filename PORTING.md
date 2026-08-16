@@ -80,6 +80,33 @@ Config in the isolated home:
     hermes config set model.provider anthropic
     hermes config set model.default  claude-sonnet-4-6
 
+## Subscription ONLY — no OpenRouter, and why the home was rebuilt
+
+The first build of this home came up reporting `Provider: OpenRouter`, and
+`auth.json` had grown a `credential_pool.openrouter` entry. Nothing configured
+it: Hermes imports credentials it finds in the environment, and
+`~/.zshrc` sources `~/.zshrc.local`, which exports `OPENROUTER_API_KEY`. So an
+inherited shell variable had quietly enrolled a paid per-token provider in a
+project that is supposed to run on the subscription alone.
+
+A config value would not have removed it — the credential was in the pool, and a
+pool entry is what a fallback reaches for. The home was deleted and rebuilt with
+the variable unset for the command that creates it:
+
+    rm -rf "$HERMES_HOME" && mkdir -p "$HERMES_HOME"
+    env -u OPENROUTER_API_KEY -u OPENAI_API_KEY HERMES_HOME=... hermes config set model.provider anthropic
+    env -u OPENROUTER_API_KEY -u OPENAI_API_KEY HERMES_HOME=... hermes config set model.default  claude-sonnet-4-6
+
+Verified after:
+
+    credential_pool providers : ['anthropic']
+    config.yaml               : no openrouter, no kimi, no moonshot
+    hermes -z "..."           : SUBSCRIPTION ONLY OK
+
+**Run every command for this project with those variables unset**, or the pool
+re-populates on the next write. `~/.zshrc.local` is deliberately left alone —
+the money-stories pipeline still needs ELEVENLABS_API_KEY from the same file.
+
 ## Step 3 — multiple tasks. Verified.
 
 Two jobs, different schedules, one tick, both delivered locally:
@@ -137,6 +164,29 @@ each was learned the expensive way:
 - **A silent success is the failure mode of this whole system** — a swallowed
   `except`, a made-for-kids flag nobody set on purpose, a −91 dB track, a denied
   command retried until the turn budget died.
+
+## What this project can currently interrupt: nothing
+
+Separate repo, separate venv, separate `HERMES_HOME`, and **no gateway
+installed** — `hermes cron` says so on every write: *"Gateway is not running —
+jobs won't fire automatically."* Nothing here fires until `hermes gateway
+install` runs, which is deliberate.
+
+Scheduled jobs on this machine as of 2026-08-16:
+
+    LOADED  exit=1   com.agent-platform.sequential.daily   08:00  money-stories production
+    LOADED  exit=1   com.hermes-for-claude.loop            03:00  skill-evolution loop (already subscription)
+    not loaded       com.self-improvement-agent.daily / .weekly / .telegram   stale plists
+
+Both loaded jobs are currently FAILING (exit 1). The agent-platform one died at
+its `describe` stage this morning; nothing retried it.
+
+**The collision is not today, it is at step 4.** The browser is machine-wide —
+one persistent Chrome on one profile behind one lock, plus one residential IP.
+A money-stories task here and `com.agent-platform.sequential.daily` would fight
+over it. So retire that launchd job at the moment the Hermes task takes over
+publishing, and not before: it is the only thing on this machine currently
+producing anything, and a replacement that does not exist yet cannot cover it.
 
 ## Status
 
