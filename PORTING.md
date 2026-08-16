@@ -190,6 +190,75 @@ commands run without prompting, `rm -rf /` is hardline-blocked even under
 `--yolo`, so a scheduled run cannot hang on a confirmation and cannot be talked
 into something catastrophic.
 
+## money-stories is otherwise complete
+
+    7ff39695b6fb  money-stories-daily    0 8 * * *   skill: broll-matching
+    4160f8125c33  money-stories-weekly   0 9 * * 0
+
+Both briefs live in `tasks/` in this repo and reach the agent through
+`--script`, so editing a brief changes the next run.
+
+`broll-matching` is registered as a **local** skill by symlinking
+`$HERMES_HOME/skills/broll-matching` at
+`agent-platform/.claude/skills/broll-matching`. A copy would drift; the symlink
+keeps agent-platform the single source of truth for a skill that documents that
+pipeline's tools.
+
+### The weekly task was run for real, and it worked
+
+Read-only, so it was safe to prove with actual work rather than a dry run. It
+pulled stats and retention, judged the format comparison, and **committed
+`ab3533d`** — three changes in one commit (its report said "three commits",
+which was wrong; verify claims against `git log`, not the report):
+
+- **`retention_loop` read `.error` on a dataclass that carries `.detail`.** The
+  attribute did not exist, so `getattr(res, "error", "")` always returned `""`
+  and every failed retention call wrote `status: "error", note: ""`. That empty
+  note was the top open defect on the channel — it made the format comparison
+  unreadable. Confirmed fixed by re-running it: the note now reads *"no rows —
+  this is NOT proof of zero retention"*, which says the Analytics API returned
+  zero rows rather than that anything failed. YouTube lags about 48h, which fits
+  v15, v16 and v17 exactly.
+- Pillar shares rebalanced on 12 videos by age-normalised views/day —
+  `corporate_disasters` was the largest target (0.29) and the weakest performer
+  (median 2.1 v/day), cut to 0.21; `founder_drama` 0.17 -> 0.25. Sum asserts to
+  1.0 in Python, verified independently.
+- `automation/daily.md` still quoted the pre-measurement priors; corrected.
+
+It also refused to call the format comparison, correctly: v15 and v14 tell the
+same story, so a 5x gap on views/day still cannot separate "StoryCard works"
+from "the Winklevoss story works". "Not yet distinguishable" was the right
+answer and it gave it.
+
+### One real gap it exposed
+
+It reported v17 as unpublished. v17 had in fact gone live on all three platforms
+that morning — but the **record stage never ran**, so nothing wrote
+`automation/logs/production.jsonl`. The control test the review was waiting for
+was invisible to the reviewer. Recorded retroactively in agent-platform
+`8ee5de3`.
+
+`production.jsonl` is the memory across runs, so an unrecorded run is not a
+bookkeeping gap: the next pick stage would have been free to repeat the story.
+
+### NOT DONE — the gateway
+
+`hermes gateway install --start-now --start-on-login` was **refused by this
+environment's approval classifier**, twice-flagged and not worked around.
+Installing it starts a persistent background service that publishes to live
+social accounts on a schedule, which is a standing commitment the operator
+should make deliberately.
+
+**Until it runs, neither job fires**, and the launchd job they replace is
+already retired — so this machine currently produces nothing. Run:
+
+    export HERMES_HOME=/Users/aarjay/projects/hermes-platform/.hermes-home
+    ~/.hermes/venvs/hermes-platform/bin/hermes gateway install --start-now --start-on-login
+    ~/.hermes/venvs/hermes-platform/bin/hermes cron status
+
+Meanwhile both jobs run on demand with `hermes cron run <id>`, which is how the
+weekly one was proven.
+
 ## Step 5 — nordyl. Not started.
 
 4. **money-stories** as the first task.
