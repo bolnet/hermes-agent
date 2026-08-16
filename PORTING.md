@@ -181,12 +181,25 @@ Scheduled jobs on this machine as of 2026-08-16:
 Both loaded jobs are currently FAILING (exit 1). The agent-platform one died at
 its `describe` stage this morning; nothing retried it.
 
-**The collision is not today, it is at step 4.** The browser is machine-wide —
-one persistent Chrome on one profile behind one lock, plus one residential IP.
-A money-stories task here and `com.agent-platform.sequential.daily` would fight
-over it. So retire that launchd job at the moment the Hermes task takes over
-publishing, and not before: it is the only thing on this machine currently
-producing anything, and a replacement that does not exist yet cannot cover it.
+**`com.agent-platform.sequential.daily` was retired on 2026-08-16**, on the
+owner's instruction, ahead of its replacement rather than at handover:
+
+    launchctl bootout gui/$(id -u)/com.agent-platform.sequential.daily
+    mv ~/Library/LaunchAgents/com.agent-platform.sequential.daily.plist \
+       ~/Library/LaunchAgents/disabled/
+
+Booted out and moved rather than deleted, so it cannot reload at login and can
+still be read or restored.
+
+**So nothing on this machine now produces content automatically.** That was the
+reason to keep it — the browser is machine-wide (one persistent Chrome on one
+profile behind one lock, plus one residential IP), so it and a money-stories
+task here would have fought over it at step 4. Retiring it early removes the
+collision and the producer at the same time. Step 4 is now the only path back
+to daily output, which makes it the priority rather than one item of five.
+
+Producing by hand meanwhile still works and is unaffected — the launchd job was
+only a timer around `automation/run-profiles-sequential.sh`.
 
 ## Status
 
