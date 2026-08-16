@@ -144,7 +144,53 @@ genuinely nothing to report. A task that has nothing to say should say nothing.
 tick BEFORE the agent, and an unchanged hash suppresses the agent run entirely.
 That is how a daily channel check costs nothing on a quiet day.
 
-## Steps 4 and 5 — not started
+## Step 4 — money-stories. Task created, wiring verified.
+
+    job       7ff39695b6fb  money-stories-daily
+    schedule  0 8 * * *     (the slot the retired launchd job held)
+    workdir   /Users/aarjay/projects/agent-platform
+    script    money-stories-brief.sh
+    deliver   local
+
+**The task definition lives in git, not in `jobs.json`.** `--script` injects the
+script's stdout into the prompt on every run, so
+`$HERMES_HOME/scripts/money-stories-brief.sh` simply cats
+`tasks/money-stories-daily.md` from this repo. An edit to that file takes effect
+on the next run — no `cron edit`, and the definition stays reviewable,
+diffable and revertible. If the brief is missing the script says so and tells the
+agent to stop rather than improvise a production run.
+
+The brief carries the autonomy grant from the original 2026 job — produce, check
+and publish without asking — plus one section the old pipeline never had:
+
+**§4 LOOK at the render.** Build a 6x4 frame grid, open it with the vision tool,
+and ask of every panel whether the footage shows what the headline claims. Prove
+the audio is audible. Every silent failure this channel shipped passed every
+numeric check that existed: a modern iPhone under "NOKIA OWNED 40% OF PHONES",
+confetti reading "Hooray!" over a $7.6bn write-off, a card at -91 dB, a
+made-for-kids flag nobody set on purpose. `vision` is an enabled toolset, so this
+is finally checkable by the thing doing the work.
+
+Verified without producing anything — a throwaway job on the same script, told to
+report readiness and stop:
+
+    workdir       /Users/aarjay/projects/agent-platform     correct
+    entry points  produce, upload, publish_verify, audience_audit, clip_sheet   all present
+    public_stats  12 videos live, v15 leading at 2153
+    ffmpeg        8.1 at /opt/homebrew/bin/ffmpeg
+    verdict       GO
+
+It also found something unprompted, which is the §1 "check BOTH lists" rule
+earning its place on the first run: **v15 and v16 are live with no script in
+`scripts/json/`**, so a slug-collision check against that directory alone would
+have been wrong about them. Next slug is v18.
+
+The throwaway job was then removed. Approval model checked first: pipeline
+commands run without prompting, `rm -rf /` is hardline-blocked even under
+`--yolo`, so a scheduled run cannot hang on a confirmation and cannot be talked
+into something catastrophic.
+
+## Step 5 — nordyl. Not started.
 
 4. **money-stories** as the first task.
 5. **nordyl** as the second.
@@ -206,6 +252,8 @@ only a timer around `automation/run-profiles-sequential.sh`.
     [x] 1. fork + upstream remote
     [x] 2. Claude subscription, no API key            verified 2026-08-16
     [x] 3. multiple tasks on one tick                 verified 2026-08-16
-    [ ] 4. money-stories as a task
+    [x] 4. money-stories as a task    job 7ff39695b6fb, 0 8 * * *, wiring verified
     [ ] 5. nordyl as a task
-    [ ] gateway install (nothing fires automatically until this runs)
+    [ ] gateway install — REQUIRED. Until it runs, job 7ff39695b6fb never fires
+        and this machine produces nothing, because the launchd job it replaces
+        is already retired. `hermes gateway install`, then `hermes cron status`.
