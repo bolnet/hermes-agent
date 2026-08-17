@@ -18,14 +18,14 @@ it: research + content tools + the platform browser toolset + this repo (git
 commit / PR / merge included). No computer_use, no osascript, no other apps,
 no personal folders. Denied commands are audited; do not retry them.
 
-    workdir   /Users/aarjay/projects/hermes-platform
+    workdir   /Users/aarjay/projects/hermes-platform/workspace
+    python    .venv/bin/python           (always this, never system python3)
     profile   surendra                   (export HERMES_PROFILE=surendra)
-    output    workspace/surendra/drafts/<NNN>-<slug>.md
+    output    profiles/surendra/drafts/<NNN>-<slug>.md
+    boundary  /Users/aarjay/projects/hermes-platform/tasks/PERMISSION-BOUNDARY.md
 
-> NOTE (2026-08-17): the former `agent-platform` workspace was retired; its
-> surendra assets (drafts, evidence, `posted.jsonl`) are pending re-port into
-> `workspace/surendra/` here. Until the ledger is restored, treat dedupe as
-> unavailable and do not publish — report the gap instead.
+The workspace is the former agent-platform tree, ported here 2026-08-17 with
+its full git history, ledger and evidence intact.
 
 ## What you must never do — and why it matters more now
 
@@ -148,7 +148,7 @@ a truncated history as complete.
    managed-browser context and **verify which account is signed in before
    posting** — the handles are `singhsurendra` on LinkedIn and `surendra_ai`
    on X. They do NOT match, so never derive one from the other. After posting,
-   download the post confirmation/analytics into `workspace/surendra/review/`
+   download the post confirmation/analytics into `profiles/surendra/review/`
    and check it with the vision tools.
 9. **Record what went out** in the posted ledger, so tomorrow's run cannot
    repeat it. `posted_ledger.py --check` is only useful if today's post is in it.

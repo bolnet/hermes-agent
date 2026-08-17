@@ -16,13 +16,14 @@ it: research + content tools + the platform browser toolset + this repo (git
 commit / PR / merge included). No computer_use, no osascript, no other apps,
 no personal folders. Denied commands are audited; do not retry them.
 
-    workdir   /Users/aarjay/projects/hermes-platform
+    workdir   /Users/aarjay/projects/hermes-platform/workspace
+    python    .venv/bin/python           (always this, never system python3)
     profile   money-stories              (export HERMES_PROFILE=money-stories)
+    boundary  /Users/aarjay/projects/hermes-platform/tasks/PERMISSION-BOUNDARY.md
 
-> NOTE (2026-08-17): the former `agent-platform` workspace was retired; the
-> pipeline (`pipeline/`, `scripts/json/`, `profiles/money-stories/`) is
-> pending re-port into this repo. Until it lands here, a run cannot produce —
-> report that and stop rather than improvising paths.
+The workspace is the former agent-platform tree, ported here 2026-08-17 with
+its full git history intact. `render/node_modules` was stripped in the port —
+run `npm install` in `render/` before the first render.
 
 Every pipeline entry point refuses to guess a profile. Pass `--profile
 money-stories` or export `HERMES_PROFILE`; a command that errors with "no profile

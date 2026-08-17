@@ -8,12 +8,10 @@ it. The review's north star is monetization: judge the week's output by
 whether research depth and content quality moved the channel toward #1 in its
 space and toward earning.
 
-    workdir  /Users/aarjay/projects/hermes-platform
+    workdir  /Users/aarjay/projects/hermes-platform/workspace
+    python   .venv/bin/python
     profile  money-stories
-
-> NOTE (2026-08-17): the former `agent-platform` workspace was retired; until
-> the pipeline is re-ported here, report the gap instead of analysing stale
-> paths.
+    boundary /Users/aarjay/projects/hermes-platform/tasks/PERMISSION-BOUNDARY.md
 
 This is the counterweight to the daily task. The daily one produces; this one is
 the only thing that decides whether producing that way is still right. A week of
