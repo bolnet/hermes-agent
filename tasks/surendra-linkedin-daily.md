@@ -213,6 +213,31 @@ a truncated history as complete.
 9. **Record what went out** in the posted ledger, so tomorrow's run cannot
    repeat it. `posted_ledger.py --check` is only useful if today's post is in it.
 
+10. **Curate the X following list — every run that touches X.** Owner
+    instruction 2026-08-17: the list is a maintained asset, not a one-time
+    cleanup.
+
+    a. **Prune** anything off-subject that crept in: finance, trading,
+       recruiting, generic startup/motivation, AI-hype with no systems
+       content.
+    b. **Add** AI accounts that have become important since the last visit.
+       The field moves fast; a list frozen in August is stale by October.
+    c. **Update `profiles/surendra/X-FOLLOW-LIST.md`** — who was added, who
+       was dropped, and why. A change not written down gets undone next visit.
+
+    Tooling: `profiles/surendra/work/x_following.py` (archive | unfollow |
+    follow). Rules that are not optional:
+
+        archive first        x-following-archive.json, so a wrongly-removed
+                             contact can be restored
+        skip the targets     never unfollow-then-refollow; that churn is the
+                             pattern X flags as spam
+        pace it              ~3s between actions, ~45 per run, several passes
+
+    The list is both the input that supplies the benchmark-read content
+    style AND a public signal a recruiter can inspect — a feed full of hedge
+    funds contradicts an agentic-AI brand.
+
 ## Report
 
 State: the subject and why, what you actually ran or read, every number with its
