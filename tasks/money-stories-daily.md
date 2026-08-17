@@ -31,6 +31,27 @@ bound — refusing to default" is missing that, not broken.
 
 ## 1. Pick — never repeat a story
 
+**Pick a FORMAT as deliberately as you pick a pillar.** `strategy.yaml` now
+carries `content_formats` alongside `content_pillars`, with the same
+actual/target/delta discipline. Compute both deficits, and prefer the largest
+format deficit unless the story shape argues otherwise — then say why.
+
+    story_card           0.40   best retention on the channel (239% @10%)
+    ugc_number_overlay   0.30   for stories where NUMBERS are the content
+    money_story          0.30   the narrated default; capped on purpose
+
+**Write the choice into the script JSON as a `format` field**, and report
+`format: <name>` with its justification next to the pillar line. This exists
+because v19 (2026-08-17) shipped a personal-finance story built entirely on
+numbers — 41%, 21->36%, 10->25% — as a generic narrated video, while the
+purpose-built number-overlay format sat unused and StoryCard's 239% retention
+sat in the report unacted-on. The data was measured and then ignored, because
+there was no field to put the decision in.
+
+Default pairing (guidance, not a rule): `personal_finance` ->
+`ugc_number_overlay`, `founder_drama` -> `money_story`, `genius_moves` ->
+`story_card`.
+
 Read `profiles/money-stories/strategy.yaml` for pillar shares. Then check BOTH:
 
     ls scripts/json/                             # every script ever written
