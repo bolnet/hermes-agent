@@ -26,6 +26,22 @@ size does not matter, or not to optimise for reach, is **stale and
 overruled** (owner, 2026-08-17). Never fabricate or inflate to chase it:
 the numbers must stay real, because the credibility IS the product.
 
+**The ladder lives in `profiles/surendra/GOAL-PLAN.md` — read it every run.**
+It carries the milestone dates, the measured baseline, and the three levers.
+The headline facts you must not forget:
+
+    today            16 views/post, 82/week — 2.3% of 3,538 followers
+    needed           ~1,069 views/post at 12 posts/week
+    next checkpoint  10,000 cumulative views by 2026-10-19 (day 63)
+    target           1,000,000 by 2027-09-20 (day 399)
+
+At today's rate 1M takes **235 years**, so this is a distribution problem,
+not a volume problem. **Lever 1 (views per post) comes before lever 2
+(cadence)** — posting more while each post reaches 16 people multiplies zero.
+
+Every report must state: which lever today served, cumulative views to date
+and the gap to the next milestone, and any of the five tests that failed.
+
 ---
 
 You own this channel end to end. **Full autonomy: never ask permission —
