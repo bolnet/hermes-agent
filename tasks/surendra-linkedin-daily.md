@@ -201,15 +201,35 @@ a truncated history as complete.
    - stat hook present, text post 900-1,300 chars
    - every number traceable to a run or a cited source
 7. **Write the draft file** under `profiles/surendra/drafts/`.
-8. **Publish** to LinkedIn and X **via the platform browser toolset only**
-   (`browser_navigate` and friends — the managed browser). Never drive Chrome,
-   Safari, or any desktop app; never use osascript or computer_use — those are
-   outside the permission boundary and will be denied. Start from a fresh
-   managed-browser context and **verify which account is signed in before
-   posting** — the handles are `singhsurendra` on LinkedIn and `surendra_ai`
-   on X. They do NOT match, so never derive one from the other. After posting,
-   download the post confirmation/analytics into `profiles/surendra/review/`
-   and check it with the vision tools.
+8. **Publish — and the cadence differs per surface.** Owner, 2026-08-17:
+   **"linkedin just one post x two"**.
+
+       run      LinkedIn              X
+       08:00    the day's ONE post    post 1 of 2
+       11:00    nothing               post 2 of 2
+
+   **Never post twice to LinkedIn in a day.** Two posts compete with each
+   other for the same distribution and both lose; LinkedIn rewards one
+   well-spaced post far more than two. X is the opposite — it rewards
+   frequency, so the second slot is an X-only run.
+
+   The 11:00 X post is **not a repeat** of the 08:00 one. Atomise the same
+   pillar differently — the number, a single finding, a counter-example, a
+   reply-with-evidence to something in the feed. If there is genuinely
+   nothing new to say, post nothing rather than restating.
+
+   Publish **via the platform browser toolset only** (`browser_navigate` and
+   friends — the managed browser). Never drive Chrome, Safari, or any desktop
+   app; never use osascript or computer_use — those are outside the
+   permission boundary and will be denied. Start from a fresh managed-browser
+   context and **verify which account is signed in before posting** — the
+   handles are `singhsurendra` on LinkedIn and `surendra_ai` on X. They do
+   NOT match, so never derive one from the other.
+
+   **Keep outbound links out of the post body** on both surfaces — put the
+   link in the first comment (LinkedIn) or a reply (X). After posting,
+   download the confirmation/analytics into `profiles/surendra/review/` and
+   check it with the vision tools.
 9. **Record what went out** in the posted ledger, so tomorrow's run cannot
    repeat it. `posted_ledger.py --check` is only useful if today's post is in it.
 
