@@ -29,28 +29,50 @@ Every pipeline entry point refuses to guess a profile. Pass `--profile
 money-stories` or export `HERMES_PROFILE`; a command that errors with "no profile
 bound — refusing to default" is missing that, not broken.
 
-## 1. Pick — never repeat a story
+## 1. Pick FOUR stories — one per format, never a repeat
 
-**Pick a FORMAT as deliberately as you pick a pillar.** `strategy.yaml` now
-carries `content_formats` alongside `content_pillars`, with the same
-actual/target/delta discipline. Compute both deficits, and prefer the largest
-format deficit unless the story shape argues otherwise — then say why.
+**This run produces FOUR videos, not one.** Owner, 2026-08-17: "if no limit
+than post each style one piece of content", "in diffrent time", and — asked
+directly whether the four should share a story — **"four different stories"**.
 
-    story_card           0.40   best retention on the channel (239% @10%)
-    ugc_number_overlay   0.30   for stories where NUMBERS are the content
-    money_story          0.30   the narrated default; capped on purpose
+    one video per FORMAT per day, FOUR DIFFERENT STORIES, staggered times
 
-**Write the choice into the script JSON as a `format` field**, and report
-`format: <name>` with its justification next to the pillar line. This exists
-because v19 (2026-08-17) shipped a personal-finance story built entirely on
-numbers — 41%, 21->36%, 10->25% — as a generic narrated video, while the
-purpose-built number-overlay format sat unused and StoryCard's 239% retention
-sat in the report unacted-on. The data was measured and then ignored, because
-there was no field to put the decision in.
+    story_card           typography-led, no b-roll
+    ugc_number_overlay   for stories where NUMBERS are the content
+    ranking_countdown    spec in profiles/money-stories/RANKING-FORMAT.md
+    money_story          the narrated default with b-roll and voiceover
+
+**Format selection is no longer a decision.** Every format ships every day, so
+the format deficit is always zero by construction. Keep computing it — but as
+a CHECK that a variant did not silently fail to render, never as an input to a
+choice. The PILLAR deficit is what still drives which four stories get picked.
+
+**Why four different stories and not four cuts of one.** The matched design
+(same narration, four formats) was the better experiment and was abandoned on
+purpose: YouTube's inauthentic-content policy names "templated storylines" and
+"slideshows that all have the same narration" as ineligible, and TikTok
+escalates from post to ACCOUNT for volumes of For-You-ineligible content
+without any rule being broken. Four same-day variants sharing one script is a
+verbatim description of both. The replacement is **randomisation instead of
+matching**: at 7 samples per format per week the story-to-story variation
+averages out rather than being held fixed. Do not "improve" this back.
+
+**Write the format into the script JSON as a `format` field** and report
+`format: <name>` next to each pillar line. That field exists because v19
+(2026-08-17) shipped a numbers-driven story as a generic narrated video while
+the purpose-built number-overlay format sat unused — the data had been measured
+and then ignored, because there was nowhere to put the decision.
 
 Default pairing (guidance, not a rule): `personal_finance` ->
 `ugc_number_overlay`, `founder_drama` -> `money_story`, `genius_moves` ->
-`story_card`.
+`story_card`, `investing`/`retirement`/`debt_and_credit` -> `ranking_countdown`.
+
+**The niche is eight pillars wide as of 2026-08-17** — the five company-story
+pillars plus `investing`, `retirement` and `debt_and_credit`. Those three carry
+a house rule that binds absolutely: **record, never verdict.** Tell what
+someone did and what the number was, with its source. Never tell the viewer
+what to buy, sell, hold or allocate. "Kodak missed digital" is history; "put
+15% in an index fund" is advice a stranger acts on with their own money.
 
 Read `profiles/money-stories/strategy.yaml` for pillar shares. Then check BOTH:
 
@@ -139,7 +161,39 @@ Write `scripts/desc/<slug>.txt`. **The first paragraph must stand alone** —
 so a first paragraph that only makes sense with the second becomes a broken
 caption on two platforms. End with a follow line and hashtags.
 
-## 6. Publish — all three
+## 6. Publish ONE now, queue the other three
+
+You produced four videos. **Publish the first and hand the rest to the
+queue** — the owner requires them staggered across the day (2026-08-17, "in
+diffrent time") so four of our own videos do not compete for one distribution
+window. Three separate cron jobs — `money-stories-slot2/3/4` at 17:05, 19:35
+and 22:05 — each publish one, following `tasks/money-stories-publish-slot.md`.
+
+**Write the queue BEFORE you publish anything.** If the run dies during the
+first upload, a queue already on disk means three finished videos still go out
+tonight; a queue written afterwards means all four are stranded.
+
+    .venv/bin/python pipeline/publish_queue.py \
+        --path profiles/money-stories/state/publish-queue.json \
+        --init <YYYY-MM-DD> \
+        --item <slug1>:<format1> --item <slug2>:<format2> \
+        --item <slug3>:<format3> --item <slug4>:<format4>
+
+**Rotate which format lands in which slot, every day**, and say in the report
+what today's mapping was. Time of day affects reach, so pinning a format to a
+slot would make the slot a second variable and confound the format comparison
+this whole design exists to make.
+
+Then publish the first slug now, and **mark it** so the 17:05 fire moves on:
+
+    .venv/bin/python pipeline/publish_queue.py \
+        --path profiles/money-stories/state/publish-queue.json --mark <slug1>
+
+Mark only AFTER verification (step 7) confirms it is live. Marking early
+retires a video that never published, and nothing downstream would notice.
+
+If a render failed and you have fewer than four videos, queue only the ones
+that exist. `--init` refuses more items than slots, so never pad the list.
 
     .venv/bin/python pipeline/run_state.py --path profiles/money-stories/state/run-<UTC stamp>.json \
         --init <UTC stamp> --profile money-stories --task shorts --set video=<slug> --set title="<title>"
@@ -169,6 +223,23 @@ from the Shorts feed, suggested videos and notifications:
 
 Two of nordyl's four videos sat in that state for a week with 20 impressions
 between them and 0% Shorts-feed traffic.
+
+Then **check Account Status on all three platforms** — this is new as of
+2026-08-17 and it is the only DOCUMENTED signal of suppression any of them
+publish. Everything else is reading tea leaves in an analytics chart:
+
+    Instagram   Settings -> Account -> Account Status   (recommendation eligibility)
+    TikTok      Studio -> More tools -> Account check   (For You feed eligibility)
+    YouTube     YouTube Studio                          (monetisation / strikes)
+
+This matters more at four videos a day than it did at one. TikTok's Community
+Guidelines state that accounts posting a lot of For-You-ineligible content "may
+be made ineligible for the FYF and harder to find" WITHOUT breaking any rule —
+a quality trigger reached through volume. Account Status is where that becomes
+visible, and it becomes visible before the views number explains why.
+
+Report the three states explicitly. "Not checked" is an acceptable answer;
+inferring "we're fine" from a views number is not.
 
 Then **append the ledger line**. This step is not optional and has now been
 missed twice — by a human on v17 and by the first autonomous run on v18, both
@@ -213,6 +284,17 @@ Do not weaken a title to dodge the bug; write it via Python and keep the number.
 Judge on **views/day**, not raw views — raw views mostly measure how long
 something has been up. Retention rows that come back `error` with an empty note
 are a known open defect; say so rather than reporting a zero.
+
+**Compare formats on ENGAGED VIEWS, never on Views.** Since 2025-03-31 a
+YouTube Shorts "view" counts every play or replay with no minimum watch time,
+which makes it close to an impression count and unable to discriminate between
+formats. The stricter old metric survives in Analytics as **Engaged Views**,
+and monetisation still runs on it. A format comparison reported on Views is
+invalid — say so and re-pull rather than reporting it.
+
+Compare formats **on the same platform**. The three feeds rank on different
+signals, so a cross-platform format comparison is confounded; use TikTok and
+Instagram to check the direction, and YouTube Engaged Views to decide.
 
 ## The report
 
