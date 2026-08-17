@@ -124,11 +124,29 @@ a truncated history as complete.
 
 ## Steps
 
-1. **Pick one subject** from the content map, preferring a 🔬 level. Say in your
-   report why you picked it.
-2. **Do the work.** If the level is runnable, run it and record real numbers —
-   versions, config, what broke. If it is 📖, read the primary source and say
-   that reading is what happened.
+0. **Publish the backlog before creating anything.** Look in
+   `profiles/surendra/drafts/` first. If a draft is finished and compliance-
+   checked but not in the posted ledger, **that draft is today's work**: skip
+   straight to step 8 and publish it. A finished draft sitting unpublished
+   while the run generates a new one is the single most expensive mistake this
+   task can make — it burns a run, produces nothing public, and grows a
+   backlog that will never drain. Only when the backlog is empty do steps 1-7
+   apply.
+
+   **Do not run new benchmarks.** (Owner instruction, 2026-08-17: "we don't
+   need new benchmarking".) Do not write or execute new measurement scripts,
+   and do not re-run an experiment that already has recorded results. Content
+   comes from evidence that already exists in `profiles/surendra/evidence/`,
+   from the recorded runs behind existing drafts, or from reading a primary
+   source. If a subject would require fresh measurement to be honest, pick a
+   different subject and say so in the report.
+
+1. **Pick one subject** from the content map, preferring one whose evidence is
+   already recorded. Say in your report why you picked it.
+2. **Do the work — from existing evidence.** Read what was already recorded
+   (`profiles/surendra/evidence/`, prior drafts, stored CSVs) and cite it with
+   provenance, or read the primary source and say that reading is what
+   happened. Never generate new measurements (step 0).
 3. **Draft the pillar** as a carousel outline plus the text post that carries
    it, and the X thread variant. X is a primary surface alongside LinkedIn.
 4. **Derive four atoms** from the same work — the surprising number, the config
