@@ -3,9 +3,17 @@
 Analyse and report. Full autonomy: change what the numbers tell you to change,
 then say what you changed. Never ask.
 
-    workdir  /Users/aarjay/projects/agent-platform
-    python   .venv/bin/python
+**Autonomy is bounded.** Read `tasks/PERMISSION-BOUNDARY.md` and stay inside
+it. The review's north star is monetization: judge the week's output by
+whether research depth and content quality moved the channel toward #1 in its
+space and toward earning.
+
+    workdir  /Users/aarjay/projects/hermes-platform
     profile  money-stories
+
+> NOTE (2026-08-17): the former `agent-platform` workspace was retired; until
+> the pipeline is re-ported here, report the gap instead of analysing stale
+> paths.
 
 This is the counterweight to the daily task. The daily one produces; this one is
 the only thing that decides whether producing that way is still right. A week of

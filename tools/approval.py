@@ -4137,9 +4137,59 @@ def _await_gateway_decision(session_key: str, notify_cb, approval_data: dict,
     return {"resolved": resolved, "choice": choice, "reason": entry.reason}
 
 
+def _audit_cron_command(command: str, result: dict) -> None:
+    """Append a JSONL audit record for a cron-context terminal command.
+
+    Unattended runs have no human watching the transcript, so every command
+    the agent attempts — approved or blocked — is recorded to
+    ``$HERMES_HOME/logs/cron_activity.jsonl`` for after-the-fact review.
+    Best-effort: an audit failure must never affect the approval decision.
+    """
+    try:
+        import json as _json
+        from datetime import datetime, timezone
+
+        home = os.environ.get("HERMES_HOME") or os.path.expanduser("~/.hermes")
+        log_dir = os.path.join(home, "logs")
+        os.makedirs(log_dir, exist_ok=True)
+        record = {
+            "ts": datetime.now(timezone.utc).isoformat(),
+            "session": get_current_session_key(),
+            "command": command[:2000],
+            "approved": bool(result.get("approved")),
+            "rule": result.get("pattern_key") or (
+                "user_deny" if result.get("user_deny") else None
+            ),
+            "message": (result.get("message") or "")[:300] or None,
+        }
+        path = os.path.join(log_dir, "cron_activity.jsonl")
+        with open(path, "a", encoding="utf-8") as fh:
+            fh.write(_json.dumps(record, ensure_ascii=False) + "\n")
+    except Exception:
+        logger.debug("cron activity audit write failed", exc_info=True)
+
+
 def check_all_command_guards(command: str, env_type: str,
                              approval_callback=None,
                              has_host_access: bool = False) -> dict:
+    """Audit-logging wrapper around :func:`_check_all_command_guards_impl`.
+
+    In cron context every decision (approve or block) is appended to
+    ``logs/cron_activity.jsonl`` so unattended activity is reviewable.
+    """
+    result = _check_all_command_guards_impl(
+        command, env_type,
+        approval_callback=approval_callback,
+        has_host_access=has_host_access,
+    )
+    if _is_cron_approval_context():
+        _audit_cron_command(command, result)
+    return result
+
+
+def _check_all_command_guards_impl(command: str, env_type: str,
+                                   approval_callback=None,
+                                   has_host_access: bool = False) -> dict:
     """Run all pre-exec security checks and return a single approval decision.
 
     Gathers findings from tirith and dangerous-command detection, then

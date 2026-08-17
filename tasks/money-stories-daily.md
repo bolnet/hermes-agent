@@ -6,9 +6,23 @@ end of a run is a failure of this task, not a courtesy: nothing else on this
 machine schedules production any more, so a run that stops to ask produces
 nothing that day.
 
-    workdir   /Users/aarjay/projects/agent-platform
-    python    .venv/bin/python           (always this, never system python3)
+**North star: monetization.** Views are the vehicle; the destination is a
+channel that earns — improve the research and content quality every run until
+this is the #1 channel in its space, then convert. Every production choice
+should be defensible as a step toward that.
+
+**Autonomy is bounded.** Read `tasks/PERMISSION-BOUNDARY.md` and stay inside
+it: research + content tools + the platform browser toolset + this repo (git
+commit / PR / merge included). No computer_use, no osascript, no other apps,
+no personal folders. Denied commands are audited; do not retry them.
+
+    workdir   /Users/aarjay/projects/hermes-platform
     profile   money-stories              (export HERMES_PROFILE=money-stories)
+
+> NOTE (2026-08-17): the former `agent-platform` workspace was retired; the
+> pipeline (`pipeline/`, `scripts/json/`, `profiles/money-stories/`) is
+> pending re-port into this repo. Until it lands here, a run cannot produce —
+> report that and stop rather than improvising paths.
 
 Every pipeline entry point refuses to guess a profile. Pass `--profile
 money-stories` or export `HERMES_PROFILE`; a command that errors with "no profile

@@ -3019,6 +3019,13 @@ def get_python_path() -> str:
 
         venv_python = venv_python_path(venv, windows=is_windows())
         if venv_python.exists():
+            # Prefer the identity-named interpreter copy when present: macOS
+            # TCC dialogs and Activity Monitor show the executed binary's own
+            # name, so unattended gateway/cron activity surfaces as
+            # "hermes-agentd" instead of an anonymous "python3.x".
+            named = venv_python.parent / "hermes-agentd"
+            if named.exists():
+                return str(named)
             return str(venv_python)
     return sys.executable
 

@@ -243,11 +243,22 @@ def _set_process_title() -> None:
          changes lldb/top but not ``ps aux``).
       4. No-op on Windows (the .exe name is already ``hermes.exe``).
     """
+    # Role-specific title so ps/top/monitoring can tell WHICH hermes process
+    # this is ("hermes-gateway" vs plain "hermes") instead of one generic
+    # name — required by the 2026-08 identifiability policy: every hermes
+    # process must be attributable at a glance.
+    title = "hermes"
+    argv = sys.argv[1:]
+    for role in ("gateway", "cron", "serve", "run", "ask"):
+        if role in argv:
+            title = f"hermes-{role}" if role != "run" else "hermes"
+            break
+
     # Strategy 1: setproctitle (best — works on macOS, Linux, BSD)
     try:
         import setproctitle  # type: ignore[import-untyped]
 
-        setproctitle.setproctitle("hermes")
+        setproctitle.setproctitle(title)
         return
     except ImportError:
         pass
