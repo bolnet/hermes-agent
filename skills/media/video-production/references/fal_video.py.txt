@@ -1,0 +1,1013 @@
+"""
+fal.ai video generation — Image-to-Video via direct API.
+
+Image-to-Video generation via fal.ai API.
+Supports multiple models at different quality/cost tiers.
+
+Usage:
+    from engine.media.generation.fal_video import generate_video, generate_avatar
+
+    # I2V from image
+    result = generate_video(
+        image_url="https://example.com/keyframe.jpg",
+        prompt="Cinematic dolly shot of neural network visualization",
+        model="kling_2_6_pro",
+        duration_seconds=5,
+    )
+
+    # Talking head avatar
+    result = generate_avatar(
+        image_url="https://example.com/headshot.jpg",
+        audio_url="https://example.com/speech.mp3",
+        prompt="Professional speaker presenting insights",
+    )
+"""
+
+import logging
+import os
+from pathlib import Path
+from typing import Optional
+
+from engine.media.config import media_config, make_filename
+
+logger = logging.getLogger(__name__)
+
+
+# ============================================================================
+# MODEL ENDPOINTS
+# ============================================================================
+
+# Image-to-Video models (verified via fal.ai API docs 2026-03-14)
+I2V_ENDPOINTS = {
+    "veo_3_1": "fal-ai/veo3.1/image-to-video",
+    "veo_3_1_fast": "fal-ai/veo3.1/fast/image-to-video",
+    "sora_2": "fal-ai/sora-2/image-to-video",
+    "kling_3_0": "fal-ai/kling-video/v3/pro/image-to-video",
+    "kling_o3": "fal-ai/kling-video/o3/pro/image-to-video",
+    "kling_2_6_pro": "fal-ai/kling-video/v2.6/pro/image-to-video",
+    "kling_o1": "fal-ai/kling-video/o1/image-to-video",
+    "wan_2_6": "wan/v2.6/image-to-video",
+    "minimax_hailuo_02": "fal-ai/minimax/hailuo-02/standard/image-to-video",
+    "minimax_hailuo_02_pro": "fal-ai/minimax/hailuo-02/pro/image-to-video",
+    "minimax_hailuo_23": "fal-ai/minimax/hailuo-2.3/pro/image-to-video",
+    "ltx_2_3": "fal-ai/ltx-2.3/image-to-video",
+    "seedance_1_5": "fal-ai/bytedance/seedance/v1.5/pro/image-to-video",
+    "pika_v2_2": "fal-ai/pika/v2.2/image-to-video",
+}
+
+# Text-to-Video models (no input image)
+T2V_ENDPOINTS = {
+    "veo_3_1": "fal-ai/veo3.1",
+    "veo_3_1_fast": "fal-ai/veo3.1/fast",
+    "sora_2": "fal-ai/sora-2/text-to-video",
+    "kling_3_0": "fal-ai/kling-video/v3/pro/text-to-video",
+    "kling_o3": "fal-ai/kling-video/o3/pro/text-to-video",
+    "kling_2_6_pro": "fal-ai/kling-video/v2.6/pro/text-to-video",
+    "kling_o1": "fal-ai/kling-video/o1/text-to-video",
+    "wan_2_6": "wan/v2.6/text-to-video",
+    "minimax_hailuo_02": "fal-ai/minimax/hailuo-02/standard/text-to-video",
+    "minimax_hailuo_23": "fal-ai/minimax/hailuo-2.3/standard/image-to-video",
+    "ltx_2_3": "fal-ai/ltx-2.3/text-to-video",
+    "pika_v2_2": "fal-ai/pika/v2.2/image-to-video",
+}
+
+# Avatar/talking-head models
+AVATAR_ENDPOINTS = {
+    "kling_avatar_pro": "fal-ai/kling-video/ai-avatar/v2/pro",
+    "kling_avatar_std": "fal-ai/kling-video/ai-avatar/v2/standard",
+    "heygen_avatar4": "fal-ai/heygen/avatar4/image-to-video",
+}
+
+# Motion control (trending dance/challenge replication)
+MOTION_CONTROL_ENDPOINT = "fal-ai/kling-video/v3/pro/motion-control"
+
+# Lip sync (post-production)
+LIPSYNC_ENDPOINTS = {
+    "kling_lipsync": "fal-ai/kling-lipsync",
+    "sync_lipsync": "fal-ai/sync-lipsync/v2",
+}
+
+# Upscaling
+UPSCALE_ENDPOINT = "fal-ai/topaz/video-upscale"
+
+# Cost per second by model (USD)
+# Cost per second by model (USD, verified 2026-03-14)
+MODEL_COSTS = {
+    "veo_3_1": 0.40,  # with audio; $0.20 without
+    "veo_3_1_fast": 0.20,
+    "sora_2": 0.50,
+    "kling_3_0": 0.22,
+    "kling_o3": 0.15,
+    "kling_2_6_pro": 0.07,  # without audio; $0.14 with
+    "kling_o1": 0.15,
+    "wan_2_6": 0.10,  # 720p; $0.15 at 1080p
+    "minimax_hailuo_02": 0.045,  # 768p standard; $0.08 pro 1080p
+    "minimax_hailuo_02_pro": 0.08,
+    "minimax_hailuo_23": 0.02,
+    "ltx_2_3": 0.06,  # 1080p
+    "seedance_1_5": 0.10,
+    "pika_v2_2": 0.05,
+    "kling_avatar_pro": 0.115,
+    "kling_avatar_std": 0.056,
+}
+
+
+# ============================================================================
+# HELPERS
+# ============================================================================
+
+def _get_fal_client():
+    """Get authenticated fal_client, raising clear errors."""
+    fal_key = os.getenv("FAL_KEY")
+    if not fal_key:
+        raise RuntimeError("FAL_KEY not set in environment")
+
+    try:
+        import fal_client
+    except ImportError:
+        raise RuntimeError("fal-client not installed. Run: pip install fal-client")
+
+    os.environ["FAL_KEY"] = fal_key
+    return fal_client
+
+
+def _download_file(url: str, local_path: Path, timeout: int = 180) -> bool:
+    """Download a file from URL to local path."""
+    import requests
+
+    response = requests.get(url, timeout=timeout)
+    if response.status_code == 200:
+        local_path.parent.mkdir(parents=True, exist_ok=True)
+        local_path.write_bytes(response.content)
+        return True
+    return False
+
+
+def _extract_video_url(result: dict) -> str:
+    """Extract video URL from fal.ai response (various formats)."""
+    # Most models: result.video.url
+    video = result.get("video")
+    if isinstance(video, dict):
+        return video.get("url", "")
+    if isinstance(video, str):
+        return video
+
+    # Some models: result.video_url
+    video_url = result.get("video_url", "")
+    if video_url:
+        return video_url
+
+    # Veo 3.1: result.videos[0].url
+    videos = result.get("videos", [])
+    if videos and isinstance(videos[0], dict):
+        return videos[0].get("url", "")
+
+    return ""
+
+
+# ============================================================================
+# IMAGE-TO-VIDEO
+# ============================================================================
+
+def generate_video(
+    image_url: str,
+    prompt: str,
+    model: str = "kling_2_6_pro",
+    duration_seconds: int = 5,
+    aspect_ratio: str = "9:16",
+    seed: Optional[int] = None,
+    output_dir: Optional[str] = None,
+) -> dict:
+    """Generate a video from an image + prompt using fal.ai.
+
+    Args:
+        image_url: URL to the input keyframe image.
+        prompt: Cinematic description of the video to generate.
+        model: Model key from I2V_ENDPOINTS.
+        duration_seconds: Target duration (model-dependent: 5 or 10).
+        aspect_ratio: "9:16", "16:9", "1:1".
+        seed: RNG seed for reproducibility.
+        output_dir: Override output directory.
+
+    Returns:
+        dict with success, video_url, local_path, model, cost_estimate, metadata.
+    """
+    endpoint = I2V_ENDPOINTS.get(model)
+    if not endpoint:
+        return {"success": False, "error": f"Unknown I2V model: {model}. Available: {list(I2V_ENDPOINTS.keys())}"}
+
+    cost_per_sec = MODEL_COSTS.get(model, 0.10)
+    est_cost = round(duration_seconds * cost_per_sec, 3)
+
+    print(f"[fal_video] Generating I2V ({model}, {duration_seconds}s, {aspect_ratio})...")
+    print(f"  Endpoint: {endpoint}")
+    print(f"  Est. cost: ${est_cost}")
+    logger.info("I2V generation: model=%s, duration=%ds, aspect=%s, cost=$%.3f", model, duration_seconds, aspect_ratio, est_cost)
+    logger.debug("I2V prompt: %s", prompt)
+    logger.debug("I2V input image: %s", image_url)
+
+    try:
+        fal_client = _get_fal_client()
+
+        # Upload local files to fal.ai CDN (API requires HTTPS URLs)
+        if image_url and not image_url.startswith(("http://", "https://", "data:")):
+            import os as _os
+            if _os.path.isfile(image_url):
+                logger.info("Uploading local keyframe to fal.ai: %s", image_url)
+                image_url = fal_client.upload_file(image_url)
+                logger.info("Uploaded: %s", image_url)
+
+        arguments = {
+            "image_url": image_url,
+            "prompt": prompt,
+        }
+
+        # Snap duration to model-accepted values
+        def _snap_duration(value: int, allowed: list[int]) -> int:
+            """Snap to nearest allowed duration (round up, capped at max)."""
+            for d in sorted(allowed):
+                if d >= value:
+                    return d
+            return allowed[-1]
+
+        # Model-specific parameter mapping
+        # Kling models use start_image_url; others use image_url
+        if model in ("kling_3_0", "kling_2_6_pro", "kling_o1"):
+            arguments["start_image_url"] = arguments.pop("image_url")
+            arguments["duration"] = str(_snap_duration(duration_seconds, [5, 10]))
+            arguments["aspect_ratio"] = aspect_ratio
+            arguments["negative_prompt"] = "blur, distort, and low quality"
+        elif model == "wan_2_6":
+            arguments["duration"] = str(_snap_duration(duration_seconds, [5, 10]))
+            arguments["resolution"] = "720p"
+            arguments["aspect_ratio"] = aspect_ratio
+        elif model in ("minimax_hailuo_02", "minimax_hailuo_02_pro"):
+            arguments["prompt_optimizer"] = True
+            arguments["duration"] = _snap_duration(duration_seconds, [6, 10])
+            arguments["aspect_ratio"] = aspect_ratio
+        elif model == "minimax_hailuo_23":
+            arguments["prompt_optimizer"] = True
+            arguments["duration"] = _snap_duration(duration_seconds, [6, 10])
+            arguments["aspect_ratio"] = aspect_ratio
+        elif model == "ltx_2_3":
+            arguments["duration"] = duration_seconds
+            arguments["resolution"] = "1080p"
+            arguments["aspect_ratio"] = aspect_ratio
+        elif model == "veo_3_1":
+            arguments["aspect_ratio"] = aspect_ratio
+            veo_dur = _snap_duration(duration_seconds, [4, 6, 8])
+            arguments["duration"] = f"{veo_dur}s"
+            arguments["resolution"] = "1080p"
+        elif model == "seedance_1_5":
+            arguments["duration"] = str(_snap_duration(duration_seconds, [5, 10]))
+            arguments["aspect_ratio"] = aspect_ratio
+            arguments["resolution"] = "720p"
+
+        if seed is not None:
+            arguments["seed"] = seed
+
+        result = fal_client.subscribe(endpoint, arguments=arguments)
+
+        video_url = _extract_video_url(result)
+        if not video_url:
+            logger.warning("No video URL in I2V response: keys=%s", list(result.keys()))
+            return {"success": False, "error": f"No video URL in response: {list(result.keys())}"}
+
+        # Download locally
+        out_dir = Path(output_dir) if output_dir else media_config.output_videos
+        desc = prompt[:40].replace(" ", "-").lower()
+        filename = make_filename("vid", f"i2v-{model}-{desc}", "mp4")
+        local_path = out_dir / filename
+
+        downloaded = _download_file(video_url, local_path)
+        logger.info("I2V video generated: model=%s, path=%s, cost=$%.3f", model, local_path, est_cost)
+        logger.debug("I2V video URL: %s", video_url)
+
+        out = {
+            "success": True,
+            "video_url": video_url,
+            "local_path": str(local_path) if downloaded else "",
+            "model": model,
+            "endpoint": endpoint,
+            "duration_seconds": duration_seconds,
+            "cost_estimate_usd": est_cost,
+            "seed": result.get("seed"),
+            "prompt_used": prompt,
+        }
+
+        # Auto-index in Content Vault
+        try:
+            from engine.content_vault import index_asset
+            index_asset(
+                file_path=str(local_path) if downloaded else "",
+                category="video_clip",
+                description=prompt[:500],
+                tags={"scene_type": "clip", "model": model, "duration": duration_seconds, "aspect_ratio": aspect_ratio},
+                metadata={"endpoint": endpoint, "cost": est_cost},
+            )
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning("[vault] Failed to index I2V video: %s", e)
+
+        return out
+    except Exception as e:
+        logger.error("I2V generation failed: model=%s, error=%s", model, e, exc_info=True)
+        return {"success": False, "error": str(e), "model": model}
+
+
+# ============================================================================
+# TEXT-TO-VIDEO
+# ============================================================================
+
+def generate_video_from_text(
+    prompt: str,
+    model: str = "kling_2_6_pro",
+    duration_seconds: int = 5,
+    aspect_ratio: str = "9:16",
+    seed: Optional[int] = None,
+    output_dir: Optional[str] = None,
+) -> dict:
+    """Generate a video from text prompt only (no input image).
+
+    Args:
+        prompt: Cinematic description of the video to generate.
+        model: Model key from T2V_ENDPOINTS.
+        duration_seconds: Target duration.
+        aspect_ratio: "9:16", "16:9", "1:1".
+        seed: RNG seed for reproducibility.
+        output_dir: Override output directory.
+
+    Returns:
+        dict with success, video_url, local_path, model, cost_estimate, metadata.
+    """
+    endpoint = T2V_ENDPOINTS.get(model)
+    if not endpoint:
+        return {"success": False, "error": f"Unknown T2V model: {model}. Available: {list(T2V_ENDPOINTS.keys())}"}
+
+    cost_per_sec = MODEL_COSTS.get(model, 0.10)
+    est_cost = round(duration_seconds * cost_per_sec, 3)
+
+    print(f"[fal_video] Generating T2V ({model}, {duration_seconds}s, {aspect_ratio})...")
+    logger.info("T2V generation: model=%s, duration=%ds, aspect=%s, cost=$%.3f", model, duration_seconds, aspect_ratio, est_cost)
+    logger.debug("T2V prompt: %s", prompt)
+
+    try:
+        fal_client = _get_fal_client()
+
+        arguments = {"prompt": prompt}
+
+        if model in ("kling_3_0", "kling_2_6_pro", "kling_o1"):
+            arguments["duration"] = str(duration_seconds)
+            arguments["aspect_ratio"] = aspect_ratio
+            arguments["negative_prompt"] = "blur, distort, and low quality"
+        elif model == "wan_2_6":
+            arguments["resolution"] = "480p" if aspect_ratio == "9:16" else "720p"
+            arguments["aspect_ratio"] = aspect_ratio
+        elif model == "minimax_hailuo_02":
+            arguments["prompt_optimizer"] = True
+            arguments["aspect_ratio"] = aspect_ratio
+        elif model == "ltx_2_3":
+            frames = max(9, (duration_seconds * 24 // 8) * 8 + 1)
+            arguments["num_frames"] = frames
+            arguments["aspect_ratio"] = aspect_ratio
+        elif model == "veo_3_1":
+            arguments["aspect_ratio"] = aspect_ratio
+            # Veo 3.1 only accepts 4s, 6s, or 8s
+            veo_dur = min(d for d in [4, 6, 8] if d >= duration_seconds) if duration_seconds <= 8 else 8
+            arguments["duration"] = f"{veo_dur}s"
+
+        if seed is not None:
+            arguments["seed"] = seed
+
+        result = fal_client.subscribe(endpoint, arguments=arguments)
+
+        video_url = _extract_video_url(result)
+        if not video_url:
+            logger.warning("No video URL in T2V response: keys=%s", list(result.keys()))
+            return {"success": False, "error": f"No video URL in response: {list(result.keys())}"}
+
+        out_dir = Path(output_dir) if output_dir else media_config.output_videos
+        desc = prompt[:40].replace(" ", "-").lower()
+        filename = make_filename("vid", f"t2v-{model}-{desc}", "mp4")
+        local_path = out_dir / filename
+
+        downloaded = _download_file(video_url, local_path)
+        logger.info("T2V video generated: model=%s, path=%s, cost=$%.3f", model, local_path, est_cost)
+        logger.debug("T2V video URL: %s", video_url)
+
+        return {
+            "success": True,
+            "video_url": video_url,
+            "local_path": str(local_path) if downloaded else "",
+            "model": model,
+            "endpoint": endpoint,
+            "duration_seconds": duration_seconds,
+            "cost_estimate_usd": est_cost,
+            "seed": result.get("seed"),
+            "prompt_used": prompt,
+        }
+    except Exception as e:
+        logger.error("T2V generation failed: model=%s, error=%s", model, e, exc_info=True)
+        return {"success": False, "error": str(e), "model": model}
+
+
+# ============================================================================
+# AVATAR / TALKING HEAD
+# ============================================================================
+
+def generate_avatar(
+    image_url: str,
+    audio_url: str,
+    prompt: str = "A person speaking naturally with expressive gestures.",
+    model: str = "kling_avatar",
+    output_dir: Optional[str] = None,
+) -> dict:
+    """Generate a talking-head avatar video from image + audio.
+
+    Args:
+        image_url: URL to headshot/portrait image.
+        audio_url: URL to speech audio file.
+        prompt: Description of the speaking style/gestures.
+        model: "kling_avatar" or "heygen_avatar4".
+        output_dir: Override output directory.
+
+    Returns:
+        dict with success, video_url, local_path, model, metadata.
+    """
+    endpoint = AVATAR_ENDPOINTS.get(model)
+    if not endpoint:
+        return {"success": False, "error": f"Unknown avatar model: {model}. Available: {list(AVATAR_ENDPOINTS.keys())}"}
+
+    print(f"[fal_video] Generating avatar ({model})...")
+    logger.info("Avatar generation: model=%s, endpoint=%s", model, endpoint)
+    logger.debug("Avatar prompt: %s", prompt)
+    logger.debug("Avatar image: %s, audio: %s", image_url, audio_url)
+
+    try:
+        fal_client = _get_fal_client()
+
+        arguments = {
+            "image_url": image_url,
+            "audio_url": audio_url,
+        }
+
+        if model in ("kling_avatar_pro", "kling_avatar_std"):
+            if prompt and prompt != "A person speaking naturally with expressive gestures.":
+                arguments["prompt"] = prompt
+        elif model == "heygen_avatar4":
+            arguments["text"] = prompt
+
+        result = fal_client.subscribe(endpoint, arguments=arguments)
+
+        video_url = _extract_video_url(result)
+        if not video_url:
+            logger.warning("No video URL in avatar response: keys=%s", list(result.keys()))
+            return {"success": False, "error": f"No video URL in response: {list(result.keys())}"}
+
+        out_dir = Path(output_dir) if output_dir else media_config.output_videos
+        desc = prompt[:30].replace(" ", "-").lower()
+        filename = make_filename("vid", f"avatar-{model}-{desc}", "mp4")
+        local_path = out_dir / filename
+
+        downloaded = _download_file(video_url, local_path)
+        logger.info("Avatar video generated: model=%s, path=%s", model, local_path)
+        logger.debug("Avatar video URL: %s", video_url)
+
+        out = {
+            "success": True,
+            "video_url": video_url,
+            "local_path": str(local_path) if downloaded else "",
+            "model": model,
+            "endpoint": endpoint,
+            "seed": result.get("seed"),
+            "prompt_used": prompt,
+        }
+
+        # Auto-index in Content Vault
+        try:
+            from engine.content_vault import index_asset
+            index_asset(
+                file_path=str(local_path) if downloaded else "",
+                category="video",
+                description=prompt[:500],
+                tags={"scene_type": "avatar", "model": model},
+                metadata={"endpoint": endpoint},
+            )
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning("[vault] Failed to index avatar video: %s", e)
+
+        return out
+    except Exception as e:
+        logger.error("Avatar generation failed: model=%s, error=%s", model, e, exc_info=True)
+        return {"success": False, "error": str(e), "model": model}
+
+
+# ============================================================================
+# MOTION CONTROL (Trending Dance/Challenge Replication)
+# ============================================================================
+
+def generate_motion_control(
+    image_url: str,
+    reference_video_url: str,
+    prompt: str = "",
+    duration_seconds: int = 5,
+    aspect_ratio: str = "9:16",
+    output_dir: Optional[str] = None,
+) -> dict:
+    """Transfer motion from a reference video onto a character image.
+
+    Use for trending dance/challenge replication — upload reference
+    motion video + Sofia/character keyframe image.
+
+    Args:
+        image_url: URL to character keyframe image.
+        reference_video_url: URL to reference motion video.
+        prompt: Optional text guidance.
+        duration_seconds: Target duration.
+        aspect_ratio: "9:16", "16:9".
+        output_dir: Override output directory.
+
+    Returns:
+        dict with success, video_url, local_path, metadata.
+    """
+    print(f"[fal_video] Generating motion control ({duration_seconds}s)...")
+    logger.info("Motion control generation: duration=%ds, aspect=%s", duration_seconds, aspect_ratio)
+    logger.debug("Motion control image: %s, reference: %s", image_url, reference_video_url)
+
+    try:
+        fal_client = _get_fal_client()
+
+        arguments = {
+            "image_url": image_url,
+            "video_url": reference_video_url,
+            "duration": str(duration_seconds),
+            "aspect_ratio": aspect_ratio,
+        }
+        if prompt:
+            arguments["prompt"] = prompt
+
+        result = fal_client.subscribe(MOTION_CONTROL_ENDPOINT, arguments=arguments)
+
+        video_url = _extract_video_url(result)
+        if not video_url:
+            logger.warning("No video URL in motion control response: keys=%s", list(result.keys()))
+            return {"success": False, "error": f"No video URL in response: {list(result.keys())}"}
+
+        out_dir = Path(output_dir) if output_dir else media_config.output_videos
+        filename = make_filename("vid", "motion-ctrl", "mp4")
+        local_path = out_dir / filename
+
+        downloaded = _download_file(video_url, local_path)
+        logger.info("Motion control video generated: %s", local_path)
+
+        return {
+            "success": True,
+            "video_url": video_url,
+            "local_path": str(local_path) if downloaded else "",
+            "model": "kling_v3_motion_control",
+            "endpoint": MOTION_CONTROL_ENDPOINT,
+        }
+    except Exception as e:
+        logger.error("Motion control generation failed: %s", e, exc_info=True)
+        return {"success": False, "error": str(e)}
+
+
+# ============================================================================
+# LIP SYNC (Post-Production)
+# ============================================================================
+
+def generate_lipsync(
+    video_url: str,
+    audio_url: str,
+    model: str = "kling_lipsync",
+    output_dir: Optional[str] = None,
+) -> dict:
+    """Apply lip sync to an existing video using a new audio track.
+
+    Args:
+        video_url: URL to the input video.
+        audio_url: URL to the audio to sync lips to.
+        model: "kling_lipsync" or "sync_lipsync".
+        output_dir: Override output directory.
+
+    Returns:
+        dict with success, video_url, local_path, metadata.
+    """
+    endpoint = LIPSYNC_ENDPOINTS.get(model)
+    if not endpoint:
+        return {"success": False, "error": f"Unknown lipsync model: {model}"}
+
+    print(f"[fal_video] Generating lipsync ({model})...")
+    logger.info("Lipsync generation: model=%s, endpoint=%s", model, endpoint)
+    logger.debug("Lipsync video: %s, audio: %s", video_url, audio_url)
+
+    try:
+        fal_client = _get_fal_client()
+
+        arguments = {
+            "video_url": video_url,
+            "audio_url": audio_url,
+        }
+
+        result = fal_client.subscribe(endpoint, arguments=arguments)
+
+        out_video_url = _extract_video_url(result)
+        if not out_video_url:
+            logger.warning("No video URL in lipsync response: keys=%s", list(result.keys()))
+            return {"success": False, "error": f"No video URL in response: {list(result.keys())}"}
+
+        out_dir = Path(output_dir) if output_dir else media_config.output_videos
+        filename = make_filename("vid", f"lipsync-{model}", "mp4")
+        local_path = out_dir / filename
+
+        downloaded = _download_file(out_video_url, local_path)
+        logger.info("Lipsync video generated: model=%s, path=%s", model, local_path)
+
+        return {
+            "success": True,
+            "video_url": out_video_url,
+            "local_path": str(local_path) if downloaded else "",
+            "model": model,
+            "endpoint": endpoint,
+        }
+    except Exception as e:
+        logger.error("Lipsync generation failed: model=%s, error=%s", model, e, exc_info=True)
+        return {"success": False, "error": str(e), "model": model}
+
+
+# ============================================================================
+# BATCH VIDEO CLIPS FROM SPEC
+# ============================================================================
+
+def generate_clips_from_spec(
+    broll_shots: list[dict],
+    keyframe_urls: Optional[dict[int, str]] = None,
+    output_dir: Optional[str] = None,
+) -> list[dict]:
+    """Generate all video clips from a VideoProductionSpec's broll_shots list.
+
+    Args:
+        broll_shots: List of BRollShot dicts from VideoProductionSpec.
+        keyframe_urls: Optional mapping of shot_number → keyframe image URL.
+            If provided, uses I2V; otherwise falls back to T2V.
+        output_dir: Override output directory.
+
+    Returns:
+        List of result dicts, one per shot.
+    """
+    logger.info("I2V clips batch generation: %d shots", len(broll_shots))
+    results = []
+    for shot in broll_shots:
+        shot_num = shot.get("shot_number", 0)
+        prompt = shot.get("prompt", "")
+        model = shot.get("model", "kling_2_6_pro")
+        duration = shot.get("duration_seconds", 5)
+        aspect_ratio = shot.get("aspect_ratio", "9:16")
+
+        # Normalize model enum values to endpoint keys
+        model_key = model.replace("VideoModel.", "").lower() if isinstance(model, str) else str(model)
+
+        keyframe_url = (keyframe_urls or {}).get(shot_num)
+        motion_ref_url = shot.get("motion_reference_url", "")
+
+        print(f"\n[fal_video] I2V clip #{shot_num}: {shot.get('shot_name', 'unnamed')}")
+
+        if motion_ref_url and keyframe_url:
+            # Motion control: transfer reference motion onto character image
+            result = generate_motion_control(
+                image_url=keyframe_url,
+                reference_video_url=motion_ref_url,
+                prompt=prompt,
+                duration_seconds=duration,
+                aspect_ratio=aspect_ratio,
+                output_dir=output_dir,
+            )
+        elif keyframe_url:
+            result = generate_video(
+                image_url=keyframe_url,
+                prompt=prompt,
+                model=model_key,
+                duration_seconds=duration,
+                aspect_ratio=aspect_ratio,
+                output_dir=output_dir,
+            )
+        else:
+            result = generate_video_from_text(
+                prompt=prompt,
+                model=model_key,
+                duration_seconds=duration,
+                aspect_ratio=aspect_ratio,
+                output_dir=output_dir,
+            )
+
+        result["shot_number"] = shot_num
+        result["shot_name"] = shot.get("shot_name", "")
+        results.append(result)
+
+    successful = sum(1 for r in results if r.get("success"))
+    total_cost = sum(r.get("cost_estimate_usd", 0) for r in results)
+    print(f"\n[fal_video] I2V clips complete: {successful}/{len(results)} shots, est. ${total_cost:.2f}")
+    logger.info("I2V clips batch complete: %d/%d successful, total_cost=$%.2f", successful, len(results), total_cost)
+
+    return results
+
+
+# Backward-compatible alias
+generate_broll_from_spec = generate_clips_from_spec
+
+
+# ============================================================================
+# LIP SYNC FROM SPEC
+# ============================================================================
+
+def generate_lipsync_from_spec(
+    avatar_clips: list[dict],
+    voiceover_url: str,
+    model: str = "kling_lipsync",
+    output_dir: Optional[str] = None,
+) -> list[dict]:
+    """Apply lip sync to avatar clips using the spec's voiceover audio.
+
+    Takes avatar video clips (from HeyGen, Kling Avatar, or Higgsfield)
+    and syncs lips to the voiceover audio track.
+
+    Args:
+        avatar_clips: List of dicts with "video_url" (and optionally "scene_number").
+            Each clip is a talking-head avatar video needing lip sync.
+        voiceover_url: URL to the voiceover audio (full or per-scene).
+        model: "kling_lipsync" ($0.14/video) or "sync_lipsync".
+        output_dir: Override output directory.
+
+    Returns:
+        List of result dicts, one per avatar clip.
+    """
+    results = []
+    for clip in avatar_clips:
+        video_url = clip.get("video_url", "")
+        scene_num = clip.get("scene_number", 0)
+
+        if not video_url:
+            results.append({
+                "success": False,
+                "error": "No video_url in clip",
+                "scene_number": scene_num,
+            })
+            continue
+
+        print(f"\n[fal_video] Lipsync scene #{scene_num}...")
+
+        result = generate_lipsync(
+            video_url=video_url,
+            audio_url=voiceover_url,
+            model=model,
+            output_dir=output_dir,
+        )
+        result["scene_number"] = scene_num
+        results.append(result)
+
+    successful = sum(1 for r in results if r.get("success"))
+    print(f"\n[fal_video] Lipsync complete: {successful}/{len(results)} clips")
+    logger.info("Lipsync batch complete: %d/%d successful", successful, len(results))
+
+    return results
+
+
+# ============================================================================
+# TREND VIDEO WORKFLOW (Sofia dance/fitness challenges)
+# ============================================================================
+
+def create_trend_video(
+    reference_video_url: str,
+    character_image_url: str,
+    prompt: str = "",
+    duration_seconds: int = 10,
+    lipsync_audio_url: str = "",
+    output_dir: Optional[str] = None,
+) -> dict:
+    """Create a trending challenge video by mapping reference motion onto a character.
+
+    Workflow: reference_video + character_image → motion control → optional lipsync → final video.
+    Designed for Sofia's dance/fitness content.
+
+    Args:
+        reference_video_url: URL to the trending dance/challenge reference video.
+        character_image_url: URL to character keyframe image (e.g., Sofia seed image).
+        prompt: Optional text guidance for the motion transfer.
+        duration_seconds: Target duration in seconds.
+        lipsync_audio_url: Optional audio URL for lip sync (if challenge has audio).
+        output_dir: Override output directory.
+
+    Returns:
+        dict with success, video_url, local_path, metadata.
+    """
+    print(f"\n[fal_video] Creating trend video...")
+    print(f"  Reference: {reference_video_url[:60]}...")
+    print(f"  Character: {character_image_url[:60]}...")
+
+    # Step 1: Motion control transfer
+    result = generate_motion_control(
+        image_url=character_image_url,
+        reference_video_url=reference_video_url,
+        prompt=prompt,
+        duration_seconds=duration_seconds,
+        output_dir=output_dir,
+    )
+
+    if not result.get("success"):
+        return result
+
+    # Step 2: Optional lipsync
+    if lipsync_audio_url and result.get("video_url"):
+        print("  Applying lipsync to trend video...")
+        lipsync_result = generate_lipsync(
+            video_url=result["video_url"],
+            audio_url=lipsync_audio_url,
+            model="kling_lipsync",
+            output_dir=output_dir,
+        )
+        if lipsync_result.get("success"):
+            result["video_url"] = lipsync_result["video_url"]
+            result["local_path"] = lipsync_result.get("local_path", result.get("local_path", ""))
+            result["lipsync_applied"] = True
+
+    result["workflow"] = "trend_video"
+    return result
+
+
+# ============================================================================
+# SOFIA TALKING HEAD
+# ============================================================================
+
+def build_avatar_prompt_from_spec(
+    spec: "VideoProductionSpec",
+    scene_number: int,
+) -> str:
+    """Build a director-style avatar prompt from the spec's gesture data.
+
+    Kling Avatar Pro responds to concrete physical choreography, not abstract
+    emotions. This function extracts gesture_prompt from the spec and formats
+    it as physical direction.
+
+    Args:
+        spec: VideoProductionSpec with gestures populated.
+        scene_number: Which scene to build the prompt for.
+
+    Returns:
+        Director-style prompt string for generate_avatar().
+    """
+    # Find gesture prompts for this scene
+    scene_gestures = [
+        g.gesture_prompt for g in spec.gestures
+        if g.scene_number == scene_number
+    ]
+
+    # Find the scene narration for context
+    scene = next((s for s in spec.scenes if s.scene_number == scene_number), None)
+
+    parts = []
+
+    # Base physical direction
+    if scene and scene.emotional_beat:
+        parts.append(f"Emotional energy: {scene.emotional_beat}.")
+
+    # Gesture choreography (the key part — concrete physical actions)
+    if scene_gestures:
+        parts.append(" ".join(scene_gestures))
+    else:
+        # Fallback: generate basic direction from scene pacing
+        pacing = scene.pacing if scene else "normal"
+        if "fast" in pacing:
+            parts.append("Rapid hand gestures, leaning forward urgently, eyebrows raised, words tumbling out fast.")
+        elif "slow" in pacing or "deliberate" in pacing:
+            parts.append("Measured hand movements, slight pauses between points, knowing expression, weight in every word.")
+        else:
+            parts.append("Natural conversational gestures, eye contact with camera, relaxed but engaged energy.")
+
+    return " ".join(parts)
+
+
+_TALKING_HEAD_DEFAULTS = {
+    "sofia": {
+        "model": "kling_avatar_pro",
+        "prompt": (
+            "Young Latina woman speaking directly to camera with expressive hand gestures, "
+            "leaning forward with energy, head tilts between points, natural smiles and "
+            "eye contact, counting on fingers when listing, palms-up shrug for emphasis"
+        ),
+    },
+    "finance-ai": {
+        "model": "kling_avatar_pro",
+        "prompt": (
+            "Indian man speaking directly to camera with confident hand gestures, "
+            "leaning forward with authority, deliberate head nods between points, "
+            "direct eye contact, counting on fingers when listing, palms-open for "
+            "emphasis, measured professional energy"
+        ),
+    },
+}
+
+
+def generate_talking_head(
+    audio_url: str,
+    image_url: str = "",
+    model: str = "",
+    prompt: str = "",
+    profile: str = "sofia",
+    output_dir: Optional[str] = None,
+) -> dict:
+    """Generate talking-head video from audio for any profile.
+
+    Args:
+        audio_url: URL to speech audio (from ElevenLabs voiceover).
+        image_url: URL to character image. Required.
+        model: Avatar model key. Defaults per profile (sofia=kling_avatar_pro, finance-ai=heygen_avatar4).
+        prompt: Director-style gesture/action prompt. Use build_avatar_prompt_from_spec()
+            to generate from the VideoProductionSpec gesture data.
+        profile: Profile name ("sofia", "finance-ai").
+        output_dir: Override output directory.
+
+    Returns:
+        dict with success, video_url, local_path, metadata.
+    """
+    if not image_url:
+        return {"success": False, "error": "No image_url provided. Pass image_url explicitly."}
+
+    defaults = _TALKING_HEAD_DEFAULTS.get(profile, _TALKING_HEAD_DEFAULTS["sofia"])
+    if not model:
+        model = defaults["model"]
+    if not prompt:
+        prompt = defaults["prompt"]
+
+    print(f"\n[fal_video] Generating {profile} talking head ({model})...")
+
+    result = generate_avatar(
+        image_url=image_url,
+        audio_url=audio_url,
+        prompt=prompt,
+        model=model,
+        output_dir=output_dir,
+    )
+
+    result["workflow"] = "talking_head"
+    result["profile"] = profile
+    return result
+
+
+
+# ============================================================================
+# VIDEO UPSCALING (Topaz via fal.ai)
+# ============================================================================
+
+def upscale_video(
+    video_url: str,
+    target_resolution: str = "1080p",
+    output_dir: Optional[str] = None,
+) -> dict:
+    """Upscale a video using Topaz via fal.ai API.
+
+    Args:
+        video_url: URL to the input video.
+        target_resolution: "1080p", "2k", or "4k".
+        output_dir: Override output directory.
+
+    Returns:
+        dict with success, video_url, local_path, metadata.
+    """
+    print(f"[fal_video] Upscaling video to {target_resolution}...")
+    logger.info("Video upscale: target=%s", target_resolution)
+    logger.debug("Upscale input video: %s", video_url)
+
+    try:
+        fal_client = _get_fal_client()
+
+        arguments = {
+            "video_url": video_url,
+            "target_resolution": target_resolution,
+        }
+
+        result = fal_client.subscribe(UPSCALE_ENDPOINT, arguments=arguments)
+
+        video_out_url = _extract_video_url(result)
+        if not video_out_url:
+            logger.warning("No video URL in upscale response: keys=%s", list(result.keys()))
+            return {"success": False, "error": f"No video URL in response: {list(result.keys())}"}
+
+        out_dir = Path(output_dir) if output_dir else media_config.output_videos
+        filename = make_filename("vid", f"upscaled-{target_resolution}", "mp4")
+        local_path = out_dir / filename
+
+        downloaded = _download_file(video_out_url, local_path)
+        logger.info("Video upscaled to %s: %s", target_resolution, local_path)
+
+        return {
+            "success": True,
+            "video_url": video_out_url,
+            "local_path": str(local_path) if downloaded else "",
+            "model": "topaz_upscale",
+            "endpoint": UPSCALE_ENDPOINT,
+            "target_resolution": target_resolution,
+        }
+    except Exception as e:
+        logger.error("Video upscale failed: %s", e, exc_info=True)
+        return {"success": False, "error": str(e)}

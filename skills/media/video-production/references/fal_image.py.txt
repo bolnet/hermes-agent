@@ -1,0 +1,597 @@
+"""
+fal.ai image generation — FLUX Ultra, FLUX Kontext, and Bria RMBG.
+
+Covers:
+- FLUX Pro Ultra: general-purpose text-to-image (infographics, diagrams)
+- FLUX Kontext Pro/Max: in-context character editing (outfit/bg changes preserving identity)
+- Bria RMBG 2.0: background removal for thumbnails/product shots
+
+Usage:
+    from engine.media.generation.fal_image import generate_image_fal, generate_kontext, remove_background
+    result = generate_image_fal("RAG architecture diagram")
+    result = generate_kontext(image_url="https://...", prompt="Change outfit to red dress")
+    result = remove_background(image_url="https://...")
+"""
+
+import logging
+import os
+from pathlib import Path
+from typing import Optional
+
+from engine.media.config import media_config, make_filename
+
+logger = logging.getLogger(__name__)
+
+# Endpoint constants
+KONTEXT_PRO_ENDPOINT = "fal-ai/flux-pro/kontext"
+KONTEXT_MAX_ENDPOINT = "fal-ai/flux-pro/kontext/max"
+BRIA_RMBG_ENDPOINT = "fal-ai/bria/rmbg/v2"
+
+
+def generate_image_fal(
+    prompt: str,
+    style: str = "professional",
+    aspect_ratio: str = "1:1",
+    output_dir: Optional[str] = None,
+) -> dict:
+    """Generate an image using fal.ai flux_ultra (fallback, non-character images).
+
+    Args:
+        prompt: Image description
+        style: "professional", "diagram", "stat_visual", "hero_image"
+        aspect_ratio: "1:1", "4:5", "16:9"
+
+    Returns:
+        dict with image_url, local_path, and metadata.
+    """
+    fal_key = os.getenv("FAL_KEY")
+    if not fal_key:
+        logger.error("FAL_KEY not set in environment")
+        return {"success": False, "error": "FAL_KEY not set in environment"}
+
+    try:
+        import fal_client
+    except ImportError:
+        logger.error("fal-client not installed")
+        return {"success": False, "error": "fal-client not installed. Run: pip install fal-client"}
+
+    style_prefix = media_config.style_prefixes.get(style, "")
+    full_prompt = f"{style_prefix}{prompt}"
+    model_endpoint = media_config.models.get("flux_ultra", "fal-ai/flux-pro/v1.1-ultra")
+
+    print(f"[fal_image] Generating fallback image ({style}, {aspect_ratio})...")
+    logger.info("Generating FLUX Ultra image: style=%s, aspect_ratio=%s, endpoint=%s", style, aspect_ratio, model_endpoint)
+    logger.debug("FLUX Ultra prompt: %s", full_prompt)
+
+    try:
+        os.environ["FAL_KEY"] = fal_key
+        result = fal_client.subscribe(
+            model_endpoint,
+            arguments={"prompt": full_prompt, "aspect_ratio": aspect_ratio, "safety_tolerance": "6", "raw": True},
+        )
+
+        images = result.get("images", [])
+        if not images:
+            logger.warning("No images returned from FLUX Ultra")
+            return {"success": False, "error": "No images returned from fal.ai"}
+
+        image_url = images[0].get("url", "")
+        if not image_url:
+            logger.warning("Empty image URL in FLUX Ultra response")
+            return {"success": False, "error": "Empty image URL"}
+
+        out_dir = Path(output_dir) if output_dir else media_config.output_images
+        out_dir.mkdir(exist_ok=True)
+        desc = prompt[:40].replace(" ", "-").lower()
+        filename = make_filename("img", desc, "jpg")
+        local_path = out_dir / filename
+
+        import requests
+        img_response = requests.get(image_url, timeout=30)
+        if img_response.status_code == 200:
+            local_path.write_bytes(img_response.content)
+
+        logger.info("FLUX Ultra image generated: %s", local_path)
+        logger.debug("FLUX Ultra image URL: %s", image_url)
+        return {
+            "success": True, "image_url": image_url,
+            "local_path": str(local_path), "prompt_used": full_prompt,
+        }
+    except Exception as e:
+        logger.error("FLUX Ultra image generation failed: %s", e, exc_info=True)
+        return {"success": False, "error": str(e)}
+
+
+# ============================================================================
+# FLUX KONTEXT — In-Context Character Editing
+# ============================================================================
+
+def generate_kontext(
+    image_url: str,
+    prompt: str,
+    model: str = "pro",
+    aspect_ratio: str = "9:16",
+    seed: Optional[int] = None,
+    output_dir: Optional[str] = None,
+) -> dict:
+    """Edit an image in-context using FLUX Kontext (preserves character identity).
+
+    Use for outfit changes, background swaps, style transfers, and scene
+    variations while keeping the person's identity consistent — no LoRA needed.
+
+    Args:
+        image_url: URL to the input image to edit.
+        prompt: Edit instruction. e.g., "Change the outfit to a red cocktail dress"
+            or "Replace background with futuristic city at night".
+        model: "pro" ($0.04/image) or "max" ($0.08/image).
+        aspect_ratio: "9:16", "16:9", "1:1", "4:5".
+        seed: RNG seed for reproducibility.
+        output_dir: Override output directory.
+
+    Returns:
+        dict with success, image_url, local_path, metadata.
+    """
+    endpoint = KONTEXT_MAX_ENDPOINT if model == "max" else KONTEXT_PRO_ENDPOINT
+
+    fal_key = os.getenv("FAL_KEY")
+    if not fal_key:
+        return {"success": False, "error": "FAL_KEY not set in environment"}
+
+    try:
+        import fal_client
+    except ImportError:
+        return {"success": False, "error": "fal-client not installed. Run: pip install fal-client"}
+
+    print(f"[fal_image] FLUX Kontext {model} edit...")
+    print(f"  Prompt: {prompt[:80]}")
+    logger.info("FLUX Kontext %s edit: endpoint=%s, aspect_ratio=%s", model, endpoint, aspect_ratio)
+    logger.debug("Kontext prompt: %s", prompt)
+    logger.debug("Kontext input image: %s", image_url)
+
+    try:
+        os.environ["FAL_KEY"] = fal_key
+
+        arguments = {
+            "image_url": image_url,
+            "prompt": prompt,
+            "aspect_ratio": aspect_ratio,
+            "output_format": "jpeg",
+        }
+        if seed is not None:
+            arguments["seed"] = seed
+
+        result = fal_client.subscribe(endpoint, arguments=arguments)
+
+        images = result.get("images", [])
+        if not images:
+            logger.warning("No images returned from FLUX Kontext %s", model)
+            return {"success": False, "error": "No images returned from FLUX Kontext"}
+
+        out_image_url = images[0].get("url", "")
+        if not out_image_url:
+            logger.warning("Empty image URL in Kontext response")
+            return {"success": False, "error": "Empty image URL in response"}
+
+        out_dir = Path(output_dir) if output_dir else media_config.output_images
+        out_dir.mkdir(exist_ok=True)
+        desc = prompt[:40].replace(" ", "-").lower()
+        filename = make_filename("img", f"kontext-{desc}", "jpg")
+        local_path = out_dir / filename
+
+        import requests
+        img_response = requests.get(out_image_url, timeout=30)
+        if img_response.status_code == 200:
+            local_path.write_bytes(img_response.content)
+
+        logger.info("Kontext %s image generated: %s", model, local_path)
+        logger.debug("Kontext output URL: %s", out_image_url)
+        return {
+            "success": True,
+            "image_url": out_image_url,
+            "local_path": str(local_path),
+            "model": f"kontext_{model}",
+            "endpoint": endpoint,
+            "prompt_used": prompt,
+            "seed": result.get("seed"),
+        }
+    except Exception as e:
+        logger.error("FLUX Kontext %s failed: %s", model, e, exc_info=True)
+        return {"success": False, "error": str(e)}
+
+
+# ============================================================================
+# BRIA RMBG 2.0 — Background Removal
+# ============================================================================
+
+def remove_background(
+    image_url: str,
+    output_dir: Optional[str] = None,
+) -> dict:
+    """Remove background from an image using Bria RMBG 2.0.
+
+    Useful for thumbnails, product shots, and compositing.
+
+    Args:
+        image_url: URL to the input image.
+        output_dir: Override output directory.
+
+    Returns:
+        dict with success, image_url (transparent PNG), local_path.
+    """
+    fal_key = os.getenv("FAL_KEY")
+    if not fal_key:
+        return {"success": False, "error": "FAL_KEY not set in environment"}
+
+    try:
+        import fal_client
+    except ImportError:
+        return {"success": False, "error": "fal-client not installed. Run: pip install fal-client"}
+
+    print("[fal_image] Removing background via Bria RMBG 2.0...")
+    logger.info("Background removal via Bria RMBG 2.0")
+    logger.debug("RMBG input image: %s", image_url)
+
+    try:
+        os.environ["FAL_KEY"] = fal_key
+
+        result = fal_client.subscribe(
+            BRIA_RMBG_ENDPOINT,
+            arguments={"image_url": image_url},
+        )
+
+        image = result.get("image")
+        if not image:
+            logger.warning("No image in RMBG response")
+            return {"success": False, "error": "No image in response"}
+
+        out_image_url = image.get("url", "") if isinstance(image, dict) else str(image)
+        if not out_image_url:
+            logger.warning("Empty image URL in RMBG response")
+            return {"success": False, "error": "Empty image URL"}
+
+        out_dir = Path(output_dir) if output_dir else media_config.output_images
+        out_dir.mkdir(exist_ok=True)
+        filename = make_filename("img", "rmbg", "png")
+        local_path = out_dir / filename
+
+        import requests
+        img_response = requests.get(out_image_url, timeout=30)
+        if img_response.status_code == 200:
+            local_path.write_bytes(img_response.content)
+
+        logger.info("Background removed: %s", local_path)
+        return {
+            "success": True,
+            "image_url": out_image_url,
+            "local_path": str(local_path),
+            "model": "bria_rmbg_v2",
+            "endpoint": BRIA_RMBG_ENDPOINT,
+        }
+    except Exception as e:
+        logger.error("Background removal failed: %s", e, exc_info=True)
+        return {"success": False, "error": str(e)}
+
+
+# ============================================================================
+# OUTFIT / SCENE VARIATION WORKFLOWS
+# ============================================================================
+
+def generate_outfit_variation(
+    base_image_url: str,
+    outfit_description: str,
+    background: str = "",
+    model: str = "pro",
+    output_dir: Optional[str] = None,
+) -> dict:
+    """Change a character's outfit while preserving identity via FLUX Kontext.
+
+    Args:
+        base_image_url: URL to the character's base image.
+        outfit_description: Description of the new outfit.
+            e.g., "red cocktail dress", "athletic wear with sneakers"
+        background: Optional new background description.
+        model: "pro" ($0.04) or "max" ($0.08).
+        output_dir: Override output directory.
+
+    Returns:
+        dict with success, image_url, local_path, metadata.
+    """
+    prompt_parts = [
+        f"Change the outfit to {outfit_description}.",
+        "Keep the person's face, hair, and body exactly the same.",
+    ]
+    if background:
+        prompt_parts.insert(1, f"Change the background to {background}.")
+
+    prompt = " ".join(prompt_parts)
+
+    return generate_kontext(
+        image_url=base_image_url,
+        prompt=prompt,
+        model=model,
+        output_dir=output_dir,
+    )
+
+
+def generate_scene_variations(
+    base_image_url: str,
+    variations: list[dict],
+    model: str = "pro",
+    output_dir: Optional[str] = None,
+) -> list[dict]:
+    """Generate multiple scene variations from a single base image.
+
+    Useful for creating multiple thumbnail options or B-roll keyframes
+    from one character reference photo.
+
+    Args:
+        base_image_url: URL to the character's base image.
+        variations: List of variation dicts, each with optional keys:
+            - outfit: str — new outfit description
+            - background: str — new background description
+            - setting: str — overall scene/setting description
+        model: "pro" or "max".
+        output_dir: Override output directory.
+
+    Returns:
+        List of result dicts, one per variation.
+    """
+    results = []
+    logger.info("Generating %d scene variations from base image", len(variations))
+    for i, var in enumerate(variations):
+        print(f"\n[fal_image] Scene variation {i + 1}/{len(variations)}...")
+
+        prompt_parts = []
+        if var.get("outfit"):
+            prompt_parts.append(f"Change the outfit to {var['outfit']}.")
+        if var.get("background"):
+            prompt_parts.append(f"Change the background to {var['background']}.")
+        if var.get("setting"):
+            prompt_parts.append(f"Place the person in {var['setting']}.")
+        prompt_parts.append("Keep the person's face, hair, and body exactly the same.")
+
+        prompt = " ".join(prompt_parts)
+
+        result = generate_kontext(
+            image_url=base_image_url,
+            prompt=prompt,
+            model=model,
+            output_dir=output_dir,
+        )
+        result["variation_index"] = i
+        result["variation_params"] = var
+        results.append(result)
+
+    successful = sum(1 for r in results if r.get("success"))
+    print(f"\n[fal_image] Variations complete: {successful}/{len(results)}")
+    logger.info("Scene variations complete: %d/%d successful", successful, len(results))
+    return results
+
+
+# ============================================================================
+# KEYFRAME — Auto-routes to LoRA for character shots
+# ============================================================================
+
+# Words that indicate the shot contains a character (needs LoRA for identity)
+_CHARACTER_KEYWORDS = {
+    "woman", "man", "person", "she", "her", "him", "his", "sofia", "sfvlr",
+    "latina", "face", "smile", "smiling", "walking", "dancing", "posing",
+    "hair", "eyes", "looking", "wearing", "dressed", "outfit",
+    "srndrs", "aarjay", "bald", "beard",
+}
+
+
+def generate_keyframe(
+    prompt: str,
+    aspect_ratio: str = "9:16",
+    profile: str = "sofia",
+    output_dir: Optional[str] = None,
+) -> dict:
+    """Generate a keyframe, auto-routing to LoRA for character shots.
+
+    If the prompt mentions a person/character AND the profile has a LoRA URL,
+    routes through generate_image_lora with the trigger word prepended.
+    Otherwise falls back to generic FLUX Ultra.
+
+    Args:
+        prompt: Scene description for the keyframe.
+        aspect_ratio: Image aspect ratio (default 9:16 for vertical).
+        profile: Profile name to check for LoRA config.
+        output_dir: Override output directory.
+
+    Returns:
+        dict with success, image_url, local_path, generation_method.
+    """
+    prompt_lower = prompt.lower()
+    has_character = any(kw in prompt_lower for kw in _CHARACTER_KEYWORDS)
+
+    _LORA_CONFIG = {
+        "sofia": {"env": "SOFIA_LORA_URL", "trigger": "sfvlr"},
+        "finance-ai": {"env": "FINANCE_AI_LORA_URL", "trigger": "srndrs"},
+    }
+    lora_cfg = _LORA_CONFIG.get(profile, {})
+    lora_url = os.getenv(lora_cfg.get("env", ""), "") if lora_cfg else ""
+
+    if has_character and lora_url:
+        # Route through LoRA for character identity consistency
+        from engine.media.generation.fal_lora import generate_image_lora
+
+        # Ensure trigger word is in the prompt
+        trigger = lora_cfg["trigger"]
+        if trigger not in prompt_lower:
+            prompt = f"{trigger} {prompt}"
+
+        print(f"[fal_image] Keyframe → LoRA (A-roll character)")
+        logger.info("Keyframe routed to LoRA (A-roll character): profile=%s, trigger=%s", profile, trigger)
+        logger.debug("Keyframe LoRA prompt: %s", prompt)
+        result = generate_image_lora(
+            prompt=prompt,
+            lora_url=lora_url,
+            aspect_ratio=aspect_ratio,
+            guidance_scale=3.5,
+            num_inference_steps=28,
+            lora_scale=1.0,
+            output_dir=output_dir,
+        )
+        result["generation_method"] = "lora"
+    else:
+        # Generic FLUX for object/environment shots
+        print(f"[fal_image] Keyframe → FLUX Ultra (B-roll scenery)")
+        logger.info("Keyframe routed to FLUX Ultra (B-roll scenery): profile=%s", profile)
+        logger.debug("Keyframe FLUX Ultra prompt: %s", prompt)
+        result = generate_image_fal(
+            prompt=prompt,
+            style="professional",
+            aspect_ratio=aspect_ratio,
+            output_dir=output_dir,
+        )
+        result["generation_method"] = "flux_ultra"
+
+    # Auto-index in Content Vault
+    if result.get("success"):
+        try:
+            from engine.content_vault import index_asset
+            scene_type = "a_roll" if result.get("generation_method") == "lora" else "b_roll"
+            index_asset(
+                file_path=result.get("local_path", ""),
+                category="image",
+                description=prompt[:500],
+                tags={"scene_type": scene_type, "profile": profile, "aspect_ratio": aspect_ratio},
+                metadata={"model": result.get("generation_method", "unknown")},
+            )
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning("[vault] Failed to index keyframe: %s", e)
+
+    return result
+
+
+# ============================================================================
+# IDEOGRAM V3 (text-in-image generation)
+# ============================================================================
+
+IDEOGRAM_V3_ENDPOINT = "fal-ai/ideogram/v3"
+
+
+def generate_ideogram(
+    prompt: str,
+    aspect_ratio: str = "16:9",
+    style: str = "REALISTIC",
+    rendering_speed: str = "BALANCED",
+    negative_prompt: str = "",
+    expand_prompt: bool = True,
+    num_images: int = 1,
+    output_dir: Optional[str] = None,
+) -> dict:
+    """Generate images with excellent text rendering via Ideogram V3.
+
+    Best for thumbnails, title cards, branded graphics, and any image
+    that needs readable text baked in.
+
+    Args:
+        prompt: Text description including any text to render in the image.
+            Use quotes around text to appear in the image:
+            'A poster that says "BREAKING NEWS"'
+        aspect_ratio: "16:9", "9:16", "1:1", "4:3", "3:4" etc.
+        style: AUTO, GENERAL, REALISTIC, DESIGN.
+        rendering_speed: TURBO ($0.03), BALANCED ($0.06), QUALITY ($0.09).
+        negative_prompt: What to avoid.
+        expand_prompt: Enable MagicPrompt enhancement.
+        num_images: 1-8.
+        output_dir: Override output directory.
+
+    Returns:
+        dict with success, image_url, local_path, seed.
+    """
+    fal_key = os.getenv("FAL_KEY")
+    if not fal_key:
+        logger.error("FAL_KEY not set for Ideogram generation")
+        return {"success": False, "error": "FAL_KEY not set"}
+
+    try:
+        import fal_client
+        os.environ["FAL_KEY"] = fal_key
+
+        # Map common aspect ratios to Ideogram size names
+        _SIZE_MAP = {
+            "16:9": "landscape_16_9",
+            "9:16": "portrait_16_9",
+            "4:3": "landscape_4_3",
+            "3:4": "portrait_4_3",
+            "1:1": "square_hd",
+        }
+        image_size = _SIZE_MAP.get(aspect_ratio, "landscape_16_9")
+
+        arguments = {
+            "prompt": prompt,
+            "image_size": image_size,
+            "style": style,
+            "rendering_speed": rendering_speed,
+            "expand_prompt": expand_prompt,
+            "num_images": num_images,
+        }
+        if negative_prompt:
+            arguments["negative_prompt"] = negative_prompt
+
+        print(f"[fal_image] Generating Ideogram V3 ({rendering_speed}, {style})...")
+        logger.info("Generating Ideogram V3: style=%s, speed=%s, aspect=%s, num_images=%d", style, rendering_speed, aspect_ratio, num_images)
+        logger.debug("Ideogram prompt: %s", prompt)
+
+        result = fal_client.subscribe(IDEOGRAM_V3_ENDPOINT, arguments=arguments)
+
+        images = result.get("images", [])
+        if not images:
+            logger.warning("No images returned from Ideogram V3")
+            return {"success": False, "error": "No images returned"}
+
+        image_url = images[0].get("url", "")
+        local_path = ""
+
+        if image_url:
+            out_dir = Path(output_dir) if output_dir else media_config.output_images
+            out_dir.mkdir(parents=True, exist_ok=True)
+            filename = make_filename("img", "ideogram", "png")
+            local_path_obj = out_dir / filename
+
+            import requests as req
+            img_data = req.get(image_url, timeout=60).content
+            local_path_obj.write_bytes(img_data)
+            local_path = str(local_path_obj)
+
+        logger.info("Ideogram V3 image generated: %s", local_path)
+        logger.debug("Ideogram output URL: %s", image_url)
+
+        out = {
+            "success": True,
+            "image_url": image_url,
+            "image_urls": [img.get("url", "") for img in images],
+            "local_path": local_path,
+            "seed": result.get("seed"),
+            "model": "ideogram_v3",
+            "endpoint": IDEOGRAM_V3_ENDPOINT,
+            "rendering_speed": rendering_speed,
+            "prompt_used": prompt,
+        }
+
+        # Auto-index in Content Vault
+        try:
+            from engine.content_vault import index_asset
+            index_asset(
+                file_path=local_path,
+                category="thumbnail",
+                description=prompt[:500],
+                tags={"scene_type": "thumbnail", "aspect_ratio": aspect_ratio, "style": style},
+                metadata={"model": "ideogram_v3", "rendering_speed": rendering_speed},
+            )
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning("[vault] Failed to index ideogram image: %s", e)
+
+        return out
+    except Exception as e:
+        logger.error("Ideogram V3 generation failed: %s", e, exc_info=True)
+        return {"success": False, "error": str(e)}
+
+
+# Backward-compatible alias — callers using the old name continue to work
+generate_broll_keyframe = generate_keyframe
