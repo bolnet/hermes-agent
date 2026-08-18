@@ -165,3 +165,127 @@ was ever needed — the tools were pointed wrong.
 mean frame-to-frame motion (reference 22.32), and integrated loudness. Platforms
 normalise playback DOWN but never up, so **-14 LUFS** via
 `pipeline/normalize_audio.py` — a quiet upload just stays quiet in the feed.
+
+---
+
+## 5. Sourcing and editing — how the top channels actually do it (2026-08-18)
+
+### ⚠️ The ranking channels SCRAPE. They do not license.
+
+Verified from the artifacts and from operators' own tutorials, not commentary.
+Five sampled channels with 8.9M-123M view videos credit **no** licensor, no
+marketplace, no creator. The genre's standard description boilerplate is
+"educational and entertainment purposes… All credit to the creators."
+
+An operator selling tutorials for this niche teaches, verbatim: source raw
+clips from "TikTok, Instagram, Reddit, and YouTube", then **"improve weak
+clips, remove text, use blur and scaling techniques"** — that is watermark and
+caption removal — then "add ranking elements like numbers, titles, and optional
+commentary to make your videos more engaging **and monetization-friendly**."
+
+**The ranking overlay is the minimum viable transformation.** That is the whole
+design of the format. We are not doing this, which costs us their footage
+quality and buys us a channel that cannot be taken down for it.
+
+**No UGC clip licensor has an API** — Jukin, ViralHog, Newsflare, Storyful are
+all human sales loops. ViralHog does advertise bulk/partnership models, which
+is the only realistic path to legitimate found footage at volume.
+
+### ⚠️⚠️ TEMPLATED SAMENESS IS ITSELF THE COMPLIANCE RISK
+
+The single most important finding for this channel's strategy, and it cuts
+against a locked format:
+
+YouTube's inauthentic-content policy (renamed 2025-07-15, clarified 2026-07-16)
+targets "generic, repetitive, or template-based" content with no narrative arc,
+and is explicitly **tool-agnostic** — AI use is not the trigger. The classifier
+already false-positives: it flagged **Kurzgesagt**, entirely hand-made, as AI
+slop, because its flat house style is over-represented in AI output.
+
+**Visual sameness across a catalogue is a detectable risk in its own right.**
+Four videos a day from one locked template is precisely the shape the policy
+describes. **Treat template diversity as a compliance requirement, not a
+creative nicety** — vary structure deliberately across the catalogue.
+
+### Economics — the numbers that decide the stack
+
+    Remotion          FREE for individuals and companies <=3 people,
+                      commercial use, unlimited renders. Beyond that
+                      $0.01/render, $100/mo minimum.
+    Resolve free      scripting is INTERNAL CONSOLE ONLY. Headless/external
+                      Python needs Studio (~$295 one-time). Since 19.1 the
+                      UIManager GUI layer is Studio-only.
+    Artlist Max       $50.66/mo annual — footage (Artgrid folded in), LUTs,
+                      music, SFX, AND unlimited credit-free generation on 13
+                      models incl. Veo 3.1 Lite, Kling 2.6, Wan 2.7, LTX 2.3.
+                      Dramatically cheaper than per-second API for volume.
+    Storyblocks       $30/mo, and a real API with a partner agreement — the
+                      genuinely programmatic search-and-download option.
+    Shutterstock      the most developer-friendly: official Python CLI, MIT,
+                      sandbox, license+download endpoints.
+    Envato            ToS EXPLICITLY BANS scripted/mass downloading. Do not
+                      build against it.
+
+Veo 3.1 $0.40/s · Kling 2.6 Pro $0.07/s · Runway Gen-4.5 ~$0.10-0.23/s.
+
+### Archival — the uncomfortable shape of it
+
+**The sources with the footage have no API; the sources with great APIs do not
+have the footage.**
+
+    Internet Archive / Prelinger   PD confirmed, free, `internetarchive` python
+                                   package. Has Pan Am (86 hits incl. a 1955
+                                   corporate film). ⚠️ SD ONLY — 640x480.
+    NARA / LoC / NASA / DVIDS      real APIs, free, PD-ish, per-item rights
+    Getty / AP / Pathé / Reuters   have the 2000s broadcast footage, all
+                                   require a human licensing step
+
+**Two traps that will bite an automated pipeline:**
+
+  * **archive.org TV News is NOT usable.** "Enron AND collection:tvnews"
+    returns 2,027 tempting hits, all `access-restricted-item: true` —
+    copyrighted network news under library research access. Fine for
+    fact-checking, not clearable for a monetised video.
+  * **C-SPAN is not public domain.** Verbatim: "C-SPAN does NOT permit
+    unlicensed commercial use of any of its audio or video programming
+    (including coverage of federal government events)." The event is public;
+    their recording is not.
+
+**Budget a Content ID dispute step regardless.** Content ID matches
+fingerprints, not rights, and outlets fingerprint their own rebroadcasts of PD
+material. Cite the archive.org item id and its `licenseurl` in the dispute.
+
+### The look — two practitioner findings that beat any LUT
+
+**⚠️ FILM GRAIN DOES NOT SURVIVE COMPRESSION.** "It can look fantastic on the
+full-quality footage but video compression often does a number and it looks
+like shit." Concrete countermeasure from someone who tested it: export a very
+high-bitrate master — **CBR 100 Mbps h.264 came out slightly better than
+ProRes after YouTube's re-encode.** This directly affects `edit/Shot.tsx`,
+which applies per-frame grain.
+
+**Over-loud SFX is the most commonly named amateur tell in this exact format.**
+Two commenters, unprompted, on an otherwise well-received ranking edit: "the
+sfx need to be more subtle (they need to add to the content not distract from
+it) — I feel like your sfx are loud."
+
+And the deflating consensus worth internalising before buying any plugin:
+**"85% is production value and lighting, 10% lens/sensor, 5% grade."**
+
+### Captions
+
+The genre-defining style is literally named in Submagic's API docs as
+**"Hormozi 2"** — bold condensed sans, word-by-word pop-on, keyword colour and
+scale emphasis. Fonts: Bebas Neue, Archivo Black, Bangers, Unbounded.
+**ZapCap at $0.10/min outputs transparent-alpha caption layers**, which keeps
+captions compositable rather than baked pixels.
+
+Note the supply chain: Submagic's "AI picks your b-roll" is a **Storyblocks
+partner API call** underneath.
+
+### Unverified — do not treat as established
+
+Why premium stock looks better (LOG/RAW/ProRes headroom) · which AI model
+passes as real footage for which shot type — **no independent source exists;
+run your own bake-off** · the AI-tell countermeasure list · any named creator
+succeeding at scale with AI b-roll (none found).
