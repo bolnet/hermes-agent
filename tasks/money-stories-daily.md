@@ -161,6 +161,25 @@ Write `scripts/desc/<slug>.txt`. **The first paragraph must stand alone** —
 so a first paragraph that only makes sense with the second becomes a broken
 caption on two platforms. End with a follow line and hashtags.
 
+## 5b. CARRY-OVER first — check the queue before producing
+
+⚠️ **Read `profiles/money-stories/state/publish-queue.json` BEFORE step 1.**
+An entry with `carry_over: true` and a future `date` is a finished video that
+did not get a slot on the day it was made. It is already rendered and verified.
+
+If one exists for today:
+
+    * publish it in SLOT 1, ahead of anything you make
+    * produce THREE new videos, not four — the day still ships four
+    * do NOT overwrite it when you write the queue; append to it
+
+A carry-over is usually an experiment that only pays off when it actually
+ships. The one queued for 2026-08-19 is the third `story_card` and the first
+with a different music bed: every story_card before it reused v15's `bed.mp3`
+byte-for-byte, so "the format works" and "that track works" cannot be told
+apart until this one runs. Producing four fresh videos and silently dropping it
+loses the comparison, and nothing downstream would report that as a loss.
+
 ## 6. Publish ONE now, queue the other three
 
 ⚠️ **YOUTUBE ONLY as of 2026-08-18.** Owner: *"lets for now just focus on

@@ -239,65 +239,32 @@ a truncated history as complete.
 
        LinkedIn   the platform browser toolset (`browser_navigate` and
                   friends, the managed browser).
-       X          the platform browser toolset as well, FOR NOW. The X API
-                  is authorised but credit-blocked — see below.
+       X          the platform browser toolset. THE SAME. Not the API.
 
    Start from a fresh managed-browser context on either surface and **verify
    which account is signed in before posting.** The handles are
    `singhsurendra` on LinkedIn and `surendra_ai` on X. They do NOT match, so
    never derive one from the other.
 
-   ## X: browser now, API when there are credits
+   ## X goes through the UI. Full stop.
 
-   Owner, 2026-08-18: *"we will come back to this, you can use UI for now."*
-   The API route is APPROVED and fully wired — it is not blocked on
-   permission, credentials or code, only on money. Do not re-litigate the
-   route; use the browser until told otherwise.
+   Owner, 2026-08-18: **"no we will use UI only."** That settles it — this is
+   not "until credits arrive", it is the route.
 
-   ⚠️ **Browser posting to X has never actually succeeded here.** It was the
-   instruction for weeks and produced zero posts — no X URL appears in
-   `posted.jsonl` or any log. So treat a browser post as UNPROVEN: verify the
-   post exists by re-reading the profile afterwards, and if it fails, say so
-   in the report with what you saw. That failure report is the thing that
-   finally gets this fixed.
+   ⚠️ **Do not attempt the X API, and do not propose it.** Credentials exist
+   and work (OAuth 1.0a, `X-Access-Level: read-write`, verified against the
+   live account), so a run WILL find them and may reason its way into using
+   them. Don't. They stay for one purpose only: a read-only identity check
+   when you need to prove which account is signed in without publishing.
 
-   **When credits are bought, switch back to the API** — everything below is
-   ready and needs no further setup.
+   For the record, so nobody re-derives it: the account is Pay Per Use at
+   $0.00 and returns 402 "credits depleted" on every endpoint except
+   `/2/users/me` and v1.1 `verify_credentials`. Buying credits is not the plan.
 
-       xurl auth status                        expect `oauth1: ✓`
-       xurl "/2/users/me"                      expect username `surendra_ai`
-       xurl post --auth oauth1 "text"          returns the new post id
-       xurl reply --auth oauth1 <id> "text"    the link goes here, not the body
-
-   Pass `--auth oauth1` explicitly. Only OAuth 1.0a is configured today, so
-   the default happens to resolve to it — but if an OAuth 2.0 token is ever
-   added, the default silently changes and the account it posts as changes
-   with it.
-
-   ⚠️ **A 200 on a read does NOT prove you can post.** Tokens inherit their
-   permission level from the moment they were created, so a read-only token
-   answers `/2/users/me` perfectly and fails only at the post. Check the level
-   directly — it publishes nothing:
-
-       xurl -v "/2/users/me" 2>&1 | grep -i access-level
-       → X-Access-Level: read-write        (confirmed 2026-08-18)
-
-   ⛔ **As of 2026-08-18 the X API is CREDIT-BLOCKED — which is why the route
-   above says browser.** Balance is $0.00 on Pay Per Use, and the wall covers
-   nearly the whole API:
-
-       200  GET /2/users/me                     free
-       402  GET /2/users/:id/tweets             "credits depleted"
-       402  anything else, reads included
-
-   So `/2/users/me` answering 200 is NOT evidence the API works — it is one of
-   the two free endpoints. **Probe a real endpoint before attempting a post.**
-   If it 402s, publish nothing to X, say so in the report, and do not retry:
-   a repeated refused write is the pattern that looks like abuse, and the fix
-   is money on the account, not another attempt.
-
-   ⚠️ Never put credential values on a command line or in the report. `xurl`
-   reads them from its own store; `.env` is the only other place they live.
+   ⚠️ **Browser posting to X is UNPROVEN over time.** It produced zero posts
+   for weeks, then worked on 2026-08-18 once the session was fixed. Verify by
+   re-reading the profile after posting, and if it fails, report exactly what
+   happened — that report is what gets it fixed.
 
    **Keep outbound links out of the post body** on both surfaces — put the
    link in the first comment (LinkedIn) or a reply (X).
