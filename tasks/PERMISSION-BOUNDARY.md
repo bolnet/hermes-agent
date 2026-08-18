@@ -16,8 +16,17 @@ retrying a denial is treated as an incident.
 - **Content creation**: the platform's content tools (image/video/tts/vision),
   `ffmpeg`, python scripts under the project, writing to the project
   workspace.
-- **Publishing**: the platform **browser toolset only** (`browser_navigate`
-  and friends — the managed browser). Post to the declared surfaces, download
+- **Publishing**: exactly two routes, one per surface.
+  - **LinkedIn — the platform browser toolset** (`browser_navigate` and
+    friends, the managed browser). There is no LinkedIn API here.
+  - **X — the official X API via `xurl`** (OAuth 1.0a, credentials in
+    `workspace/.env`). Amended 2026-08-18 with the owner's approval. This is
+    not a widening: the API can do strictly less than a browser signed into
+    the same account — it posts as `@surendra_ai` and nothing else, with no
+    browsing, no other sites, and no session to leak. The fence's target is
+    OS control, not the official API of a declared surface.
+
+  Either way: post only to the declared surfaces, download
   results/analytics **into the project workspace** (never `~/Downloads`) and
   review them with the vision tools.
 - **Self-improvement**: edit code under this repo, `git` commit/branch/push,
@@ -37,6 +46,12 @@ retrying a denial is treated as an incident.
 
 ## When a step seems to need a forbidden capability
 
-It doesn't. Find the in-boundary route (the browser toolset can do everything
-posting requires) or record the blocker in the run report as output. A blocked
-run that explains itself is a success; an escalation is the only real failure.
+It doesn't. Find the in-boundary route — between the browser toolset and the X
+API, everything posting requires is covered — or record the blocker in the run
+report as output. A blocked run that explains itself is a success; an escalation
+is the only real failure.
+
+⚠️ The two publishing routes above are the complete list. "The X API is allowed,
+so presumably the LinkedIn one is too" is exactly the reasoning this fence
+exists to stop: each route was named individually, after being checked
+individually. A new route is the owner's decision, never a run's.
