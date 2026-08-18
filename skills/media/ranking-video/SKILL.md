@@ -14,7 +14,7 @@ Where something is inferred rather than measured, it says so.
 
 ---
 
-## ⚠️ START HERE — the four things that went wrong repeatedly
+## ⚠️ START HERE — the eight things that went wrong repeatedly
 
 Read these before writing any code. Every one shipped, passed every check that
 existed at the time, and had to be caught by looking at pixels.
@@ -40,6 +40,40 @@ transition. The reference's board is pixel-stable through every whip.
 `undefined` and template-literalled into **"undefined158 yrs"** on the payoff
 board. It shipped in *both* renderers from one copy-paste. **Default optional
 fields at the point of USE, not only in the schema.**
+
+**5. The shot grid TRUNCATED a narration take, silently.** The item hold is a
+property of the POSITION in the countdown; line length is a property of the
+LINE. Kodak's 3.73s take went into a 3.07s beat and Remotion trimmed the
+`<Audio>` at its `<Sequence>` boundary: the render said *"it invented..."*.
+The take was correct, its duration and loudness were correct, and
+`verify_takes.py` — which transcribes the TAKE — passed it. **Fit holds to the
+takes (`pipeline/ranked_holds.py`), and verify the RENDER
+(`pipeline/verify_render_narration.py`), not the inputs.** A computed hold that
+exceeds the reference's 141-frame ceiling must RAISE: clamping is what
+truncation looks like once you have added a check.
+
+**6. The two "platform builds" were byte-identical.** `RankedEdit` never read
+`props.platform`, so the TikTok file was the YouTube file under another name,
+with the source chip sitting under TikTok's caption block. `RankedList` had
+carried the safe insets since it was written. **Diff the output file sizes —
+if the two builds match to the byte, only one of them exists.**
+
+**7. Every multi-word label rendered jammed together.** "PanAm",
+"LehmanBrothers", "Fivecompaniesthat". The headline is a flex row of word spans
+with `gap: "0 0.28em"`, and **`em` resolves against the element the gap is set
+on** — the container had no `fontSize`, so a 0.28em gap resolved against the
+16px default and put ~4px between 78px words. It reads as a font-loading fault
+rather than a spacing one, which is why it survived several frame reviews.
+**Put the size on the container, not only on the children.**
+
+**8. Bare-domain citations.** `"url": "https://www.reuters.com/"` on two items
+and `"https://www.sec.gov/"` on a third. All valid URLs, so the schema's
+"source URL required" refinement passed and the render drew a source chip under
+every number. **A front page is not a citation.** `pipeline/verify_sources.py`
+refuses one offline. Real sources: SEC EDGAR
+(`data.sec.gov/submissions/CIK##########.json`, needs a *declared* User-Agent —
+browser UAs get 403) and CourtListener's open search API. Treat 202/403/429 as
+"unconfirmed, open by hand", never as a pass.
 
 ---
 
@@ -247,17 +281,41 @@ hundreds of millions. Those were **neglected mirror accounts**. Measuring a
 platform through accounts famous somewhere else measures their neglect, not the
 platform. Sample natively or do not conclude.
 
-**Instagram is a MEDIUM MISMATCH, not a quality problem.** Ranking there lives
-in **carousels**, not Reels:
+**Instagram is a MEDIUM MISMATCH, not a quality problem.** Ranking there does
+NOT live in Reels:
 
-    @rankingroyals (204K)        carousel    80,000 likes
-    @dailyrankdepartment (80K)   carousel    18,000 likes
+    @rankingroyals (204K)        SINGLE IMAGE   79,532 likes
     --- against ranking REELS from comparable accounts ---
-    @thetierzoo (67K)            reel         3,637 likes
-    @watchmojo (721K)            reel           877 likes
+    @thetierzoo (67K)            reel            3,637 likes
+    @watchmojo (721K)            reel              877 likes
 
-The `(SLIDE 1/4)` framing is the persistent board in another medium. **Instagram
-gets a carousel** (`RankedCarousel.tsx`, 1080x1350).
+⚠️ **CORRECTED 2026-08-18. It is a single 4:5 image, not a carousel.** This
+file previously said "carousels" on two rows of evidence. Re-reading the actual
+scrape:
+
+  * all 12 sampled @rankingroyals posts are `__typename: GraphImage` — zero
+    `GraphSidecar`, i.e. **not one carousel in the sample**
+  * the @dailyrankdepartment row had NO DATA behind it at all. Both saved
+    responses are `{"message": "Please wait a few minutes before you try
+    again.", "status": "fail"}` — a rate-limit body that was written down as a
+    measurement.
+
+The 79,532-like post (`DK-MVP9hrvl`, "Safest Countries If World War III
+Occurs") puts **the entire list on one slide**: branded header, two-column rows
+with flags, a paragraph of explanation ABOVE the list, an on-image `Source:`
+line, handle and platform icons in the footer, over a faded background photo.
+No countdown, no reveal, no per-row numerals — the payoff is exposed
+immediately, which is the exact opposite of the video grammar.
+
+That makes sense for the medium: a feed image gets one scroll-stop, so
+withholding the answer wastes the only moment you have. **Do not port the
+countdown to Instagram.** `RankedCarousel.tsx` (1080x1350, 7 slides) is built
+on the mistaken premise and should be replaced by a single-image composition
+before anything ships there.
+
+The lesson is the one this file already teaches about TikTok, in a second
+costume: **a claim about a platform is only as good as the response body it
+came from.** Check that the scrape succeeded before reading a number off it.
 
 ⚠️ **Instagram view counts are unobtainable and the one API field that exists is
 corrupt** — 3 of 10 sampled reels reported views BELOW likes. Take views from
