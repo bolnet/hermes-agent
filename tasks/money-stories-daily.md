@@ -163,6 +163,19 @@ caption on two platforms. End with a follow line and hashtags.
 
 ## 6. Publish ONE now, queue the other three
 
+⚠️ **YOUTUBE ONLY as of 2026-08-18.** Owner: *"lets for now just focus on
+youtube. lets stop posting to other platforms — it will make life easier."*
+
+`profile.yaml` declares `platforms: [youtube_shorts]` and `upload.py`
+intersects its flags with that list, so TikTok and Instagram are off even on a
+bare invocation. **Do not try to route around it**, and do not treat a skipped
+platform as a failure — `[*] profile declares platforms=... — SKIPPING tiktok,
+instagram` is the system working.
+
+Everything below about TikTok and Instagram — captions, account-status checks,
+the three-way URL record — is kept because this is reversible, not because it
+is live. Record `null` for those two, never a fabricated URL.
+
 You produced four videos. **Publish the first and hand the rest to the
 queue** — the owner requires them staggered across the day (2026-08-17, "in
 diffrent time") so four of our own videos do not compete for one distribution
