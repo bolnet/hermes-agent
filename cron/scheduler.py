@@ -5787,6 +5787,48 @@ def _run_with_fire_claim_heartbeat(job: dict, run) -> bool:
         heartbeat_thread.join(timeout=1.0)
 
 
+# ── A run that FINISHED is not a run that SUCCEEDED ────────────────────────
+#
+# `last_status` recorded the agent's process outcome, so every run that came
+# back without raising was "ok". On 2026-08-18 that included: a surendra run
+# that published nothing because LinkedIn showed a phone checkpoint, a
+# money-stories run that produced four videos and published zero, and a
+# board-order run that uploaded its video to ANOTHER TENANT'S CHANNEL. Three
+# distinct failures, three "ok" rows, and the owner found the last one by eye.
+#
+# An agent cannot signal failure through its exit code — it is a conversation,
+# not a command, and it ends politely whatever happened. So it declares the
+# outcome instead, and the scheduler believes the declaration over the fact
+# that the process ended.
+#
+# Anchored to the start of a line in the FINAL RESPONSE only, never the full
+# transcript: the task briefs describe this marker, so scanning everything the
+# agent read would match the instructions telling it what to write.
+_RUN_OUTCOME_RE = re.compile(
+    r"^[ \t>*_-]*RUN-OUTCOME:[ \t]*(BLOCKED|FAILED|PARTIAL)\b[ \t]*(.*)$",
+    re.IGNORECASE | re.MULTILINE,
+)
+
+
+def _self_declared_failure(final_response: Optional[str]) -> Optional[str]:
+    """The agent's own verdict when it reports not succeeding, else None.
+
+    Deliberately one-directional: a run can only mark ITSELF worse, never
+    better. There is no RUN-OUTCOME: OK that upgrades a failure — an agent
+    asserting success is the thing that was never trustworthy here.
+    """
+    if not final_response:
+        return None
+    match = _RUN_OUTCOME_RE.search(final_response)
+    if not match:
+        return None
+    verdict = match.group(1).upper()
+    # Strip markdown that wrapped the marker: "**RUN-OUTCOME: BLOCKED** x"
+    # otherwise leaves the closing asterisks inside the recorded reason.
+    detail = (match.group(2) or "").strip().strip("*_ ").strip()
+    return f"{verdict}{': ' + detail if detail else ''} (self-reported by the run)"
+
+
 def run_one_job(
     job: dict,
     *,
@@ -6029,6 +6071,17 @@ def _run_one_job_body(
                     "Interrupted by gateway shutdown before the run finished "
                     "(tool subprocess was killed mid-flight)."
                 )
+
+            # The run's own verdict, checked after the interrupt peek so a
+            # genuinely interrupted run keeps the more specific reason.
+            if success:
+                declared = _self_declared_failure(final_response)
+                if declared:
+                    success = False
+                    error = declared
+                    logger.info(
+                        "Job %s finished cleanly but declared %s", job["id"], declared
+                    )
 
             # Deliver the final response to the origin/target chat.
             # If the agent responded with [SILENT], skip delivery (but

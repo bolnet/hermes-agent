@@ -337,3 +337,24 @@ Conventional commits, no attribution footer.
 
 If a step fails twice, stop, write the failure plainly in the report, and do not
 loop.
+
+## RUN-OUTCOME — the last line of your report, always
+
+End the report with exactly one of these, on its own line:
+
+    RUN-OUTCOME: OK        everything this brief asked for actually happened
+    RUN-OUTCOME: PARTIAL   some of it happened — say which, and which did not
+    RUN-OUTCOME: BLOCKED   something stopped you — name it
+    RUN-OUTCOME: FAILED    it went wrong
+
+The scheduler reads this line and records the job as FAILED for anything other
+than OK. Until 2026-08-18 it recorded the process outcome instead, so a run that
+finished politely was `ok` — including one that published nothing behind a login
+wall, one that produced four videos and published none, and one that uploaded to
+another channel entirely. Three real failures, three green rows.
+
+⚠️ **OK means the outcome, not the effort.** A careful run that was blocked is
+BLOCKED. Nothing is lost by saying so — a blocked run that explains itself is
+the most useful thing this system produces, and it is the only signal that
+reaches the owner without them checking by hand.
+
