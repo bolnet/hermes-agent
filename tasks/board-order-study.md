@@ -52,6 +52,38 @@ avoids.
 session can see which ones are climbing. A channel whose ratio is rising is a
 format in ascent, and that is the earliest signal available.
 
+## 1b. PROBE CHEAPLY — this is what killed the 2026-08-19 run
+
+That run examined five videos, produced a **1.8 MB** transcript that was almost
+entirely raw `yt-dlp` JSON — storyboard URLs, HTTP headers, every format
+variant — then died without writing a single finding. Eleven minutes of real
+work lost because the probe was expensive.
+
+⚠️ **NEVER run bare `yt-dlp <url>` or `yt-dlp -j`.** One probe emits ~350 KB.
+
+**Always `--print` the exact fields, and `--flat-playlist` for listings:**
+
+    yt-dlp --flat-playlist --print "%(view_count)s|%(id)s|%(uploader)s|%(title)s" \
+      "https://www.youtube.com/@CHANNEL/videos"
+
+    yt-dlp --no-warnings --skip-download \
+      --print "%(upload_date)s|%(view_count)s|%(like_count)s|%(duration)s|%(title).60s" \
+      "https://www.youtube.com/watch?v=ID"
+
+One line per video instead of a wall of JSON. Everything the scoring needs —
+views, subs, duration, upload date, engagement — is available this way.
+
+⚠️ **Video and audio download are BLOCKED** — YouTube returns 403 on every
+client and with cookies, verified 2026-08-19. Subtitles and metadata still work
+(`--write-auto-subs`, `--write-info-json`). Do not burn the session retrying
+downloads; if you need cut-rate data, screen-record playback instead.
+
+**Check engagement, not just views.** A like rate under ~0.1% with reported —
+not hidden — numbers means the views were probably promoted rather than earned.
+That test disqualified a 5.45M-view reference on nordyl the same day:
+
+    like% = 100 * like_count / view_count      normal is 2-5%
+
 ## 2. Measure ONE thing properly
 
 Pick the single most promising find and measure it, or advance an existing style

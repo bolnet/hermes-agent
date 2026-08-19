@@ -200,6 +200,57 @@ def finish_execution(
     return record
 
 
+# An execution running longer than this is treated as abandoned.
+#
+# ⚠️ There was NO upper bound before 2026-08-19, and the gap is narrow but real:
+# recover_interrupted_executions() only reclaims an execution whose OWNER
+# PROCESS is dead. When the gateway is still alive and merely the agent
+# subprocess dies — a tool timeout, an OOM, a killed child — the row stays
+# 'running' forever. board-order-study did exactly that: eleven minutes of real
+# work, then silence, and the job showed no status at all rather than a failure.
+# Invisible is worse than red, because nothing prompts anyone to look.
+#
+# Sized well above any healthy run rather than tightly: money-stories produces
+# four videos and legitimately runs for the better part of an hour. This is a
+# backstop for runs that are never coming back, not a runtime budget.
+MAX_EXECUTION_HOURS = 4
+
+
+def _sweep_stalled_executions(conn: sqlite3.Connection, now_iso: str) -> List[Dict[str, Any]]:
+    """Close out executions that have been running implausibly long.
+
+    Marked 'unknown', not 'failed', for the same reason the owner-exited path
+    is: we cannot tell from here whether side effects ran. A study run that
+    died writes nothing, but a publish run that died may already have posted.
+    """
+    from datetime import timedelta
+
+    cutoff = (_hermes_now() - timedelta(hours=MAX_EXECUTION_HOURS)).isoformat()
+    rows = conn.execute(
+        """SELECT id, job_id, claimed_at FROM executions
+           WHERE status IN ('claimed','running') AND claimed_at < ?""",
+        (cutoff,),
+    ).fetchall()
+    swept: List[Dict[str, Any]] = []
+    for row in rows:
+        cur = conn.execute(
+            """UPDATE executions SET status='unknown', finished_at=?, error=?
+               WHERE id=? AND status IN ('claimed','running')""",
+            (now_iso,
+             f"No terminal state after {MAX_EXECUTION_HOURS}h. The owning "
+             f"process was still alive, so this was not an interrupted "
+             f"scheduler — the run itself stopped without reporting. Whether "
+             f"side effects ran is unknown.",
+             row["id"]),
+        )
+        if cur.rowcount:
+            record = _record(conn.execute(
+                "SELECT * FROM executions WHERE id=?", (row["id"],)).fetchone())
+            if record is not None:
+                swept.append(record)
+    return swept
+
+
 def recover_interrupted_executions() -> int:
     """Mark provably abandoned attempts unknown without scheduling retries."""
     now = _hermes_now().isoformat()
@@ -230,6 +281,9 @@ def recover_interrupted_executions() -> int:
                 ).fetchone())
                 if record is not None:
                     recovered.append(record)
+        stalled = _sweep_stalled_executions(conn, now)
+        recovered.extend(stalled)
+        changed += len(stalled)
         if changed:
             _prune_unlocked(conn)
     for record in recovered:
