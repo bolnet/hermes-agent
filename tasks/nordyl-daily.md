@@ -64,6 +64,28 @@ ships. "Helps you heal" does not.
 niche is built on something the guardrails forbid — outcome claims, sequencing
 protocols, medical persona. The craft transfers; the hooks do not.
 
+## 2b. Which reference — they are NOT equal
+
+Two clone compositions exist and one of them rests on a bad number.
+
+    NordylClone       Infographics Show   109 days old   2.27% engagement  ✅
+    NordylPeptide101  PolyPeptide Group   5.9 YEARS old  0.01% engagement  ⚠️
+
+**Default to `NordylClone`.** Its reference is current and has a real audience.
+
+`NordylPeptide101` is still a legitimate build — a seller making claim-free
+animated content is exactly our constraint set, and almost nobody else in the
+niche is inside it. But **never cite its 5.45M views as a reason.** Both of that
+video's engagement numbers are reported and both sit ~100x below every peer,
+which is what promotion looks like rather than reach. `TEN-BEST-SHOTS.md` still
+calls it "the single best bet we have" on 5,738 views/sub; that entry is wrong
+and is being corrected.
+
+⚠️ **Do not blend the two.** Their cut rates belong to different classes of
+video: PolyPeptide is 15 cuts over 104s (6.9s average, a SLOW film) and the
+Infographics build cuts at ~1.4s. Subdividing one to the other's rate produces a
+video that matches neither reference and can be compared against neither.
+
 ## 3. Craft — what the measurement actually supports
 
 From `research/COMPETITOR-CRAFT-2026-08-19.md`, measured not guessed:
@@ -81,9 +103,16 @@ From `research/COMPETITOR-CRAFT-2026-08-19.md`, measured not guessed:
   * **One story, one cut per platform** — §4. A 16:9 re-exported to 9:16 is a
     crop, not a cut. Re-lay the typography for the frame it will be viewed in.
 
-⚠️ Cut rate, shot length and LUFS for competitors are **NOT measured** — YouTube
-403s on video and audio download. Do not cite numbers for them; they do not
-exist yet.
+⚠️ **Cut rate exists for the two references we cloned, and NOWHERE else.**
+`NordylPeptide101/index.tsx` carries a measured spec for PolyPeptide — 104s, 15
+cuts, 6.9s average — recorded when that video was still downloadable. Those are
+real numbers and may be used.
+
+For every OTHER competitor, cut rate, shot length and LUFS are **not measured**:
+YouTube now 403s on video and audio download, so nothing new can be measured
+this way. Do not cite numbers that do not exist, and do not generalise
+PolyPeptide's 6.9s to the niche — the Infographics build cuts at ~1.4s, five
+times faster, and both are references we hold.
 
 ## 4. Verify before it goes anywhere
 
