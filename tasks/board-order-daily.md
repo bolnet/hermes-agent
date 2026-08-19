@@ -60,13 +60,52 @@ data: four-a-day was money-stories' answer to a different problem and its own
 notes flag templated sameness as the real compliance risk.
 
     a. choose the style     default clean-board; only a `measured` style
-    b. choose the subject   entertainment, and one whose peak moments are
-                            genuinely SOURCEABLE — see §3
+    b. choose the subject   §2b — from what PERFORMS, not from what stock has
     c. source every asset   nothing from any reference video, ever
     d. build               the style's `implementation` component
     e. verify              §4
     f. publish             unlisted first ONLY if a check is inconclusive;
                             otherwise public
+
+## 2b. Pick the subject from PROVEN DEMAND — anything entertainment
+
+Owner, 2026-08-18: *"make sure channel is for entertainment and it can have
+ranking for anything related to entertainment — pick top video in any
+entertainment or huge views and make new video based on that."*
+
+**The method, in order:**
+
+  1. Find an entertainment video or topic that is genuinely PERFORMING — huge
+     views, or a strong views-to-subscribers ratio. `board-order-study` at 12:47
+     already ranks channels this way and writes them to LEARNED.md; start there,
+     and look beyond ranking channels — any entertainment video with outsized
+     views names a topic people are currently watching.
+  2. Build OUR OWN ranking on that topic. Our items, our footage, our board.
+     Never the reference's clips, never its list — the topic is the signal, the
+     video is ours.
+  3. Say in the report which video or topic you took the signal from, and what
+     its numbers were. "It seemed popular" is not a reason.
+
+**Entertainment is the WHOLE field**, not one corner of it: film and TV moments,
+music, games, celebrities, internet culture and memes, food, animals, travel,
+stunts, sport. The only hard rule remains no finance and no business-collapse
+stories — that is money-stories' territory.
+
+⚠️ **DO NOT let sourcing pick the subject. That is what went wrong.** The first
+three videos were "Best Action Moments", "Best Extreme Moments" and "Best Skate
+Moments" — three near-identical action-clip rankings, titles differing by one
+word. No one chose that. §3 said to pick subjects whose peak moments are
+sourceable on free stock, and the honest answer to that is always sports. The
+constraint selected the subject three times running while the strategy sat
+unread.
+
+Sourcing is a problem to SOLVE for the chosen subject, not the thing that
+chooses it. If the footage is not there, say so in the report and propose the
+licensing spend — do not silently retreat to skateboards.
+
+⚠️ **Do not repeat the same subject AREA twice in a row.** Check
+`profiles/board-order/out/` before choosing; three consecutive action-sports
+videos is exactly the templated sameness this brief opens by warning about.
 
 ## 3. Sourcing — the wall this channel keeps hitting
 
@@ -78,11 +117,24 @@ at 150px.
 **Cut each clip at its highest-motion window, not its head.** Stock clips open
 and close on a hold, so the first N seconds is reliably the dullest part.
 
-⚠️ **`clean-board` needs PEAK-ACTION footage and free stock does not carry it.**
-Licensed UGC (Jukin / ViralHog / Newsflare) has it and none of them has an API —
-all human sales loops. So either pick a subject whose peak moments ARE
-sourceable, or propose the licensing spend in your report. Do not quietly
-substitute ambient B-roll and call it the style.
+⚠️ **`clean-board` needs PEAK footage and free stock is thin on it.** Licensed
+UGC (Jukin / ViralHog / Newsflare) has it and none of them has an API — all
+human sales loops.
+
+**This is a sourcing problem to solve, NOT a licence to re-pick the subject.**
+Read as the latter it produced three action-sports videos in a row (see §2b).
+For a subject chosen from proven demand, the options in order are:
+
+    1. archive and public-domain film, not just modern stock — many
+       entertainment topics are far better served by archival than by Pexels
+    2. stills animated with i2v, which this project has already used for
+       exactly this gap
+    3. a different ITEM within the same subject that is sourceable
+    4. propose the licensing spend in the report
+
+Only if all four fail does the subject change — and then the report says which
+subject was abandoned and why. Do not quietly substitute ambient B-roll and call
+it the style.
 
 ⚠️ **OR is the default operator on Pexels and Pixabay** — extra words BROADEN
 results. Search single concrete nouns.
